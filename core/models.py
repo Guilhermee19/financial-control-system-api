@@ -49,7 +49,7 @@ class Finance(BaseModel):
     description = models.CharField(max_length=255)
 
     def __str__(self):
-        return f"{self.tag} - {self.value}"
+        return f"{self.description} - {self.value}"
 
 class Parcela(models.Model):
     finance = models.ForeignKey(Finance, related_name='installments', on_delete=models.CASCADE)
@@ -74,4 +74,4 @@ class FinanceEntry(BaseModel):
     repeat = models.CharField(max_length=10, choices=REPEAT_CHOICES)
 
     def __str__(self):
-        return f"{self.type} - {self.value}"
+        return f"{self.description} - {self.value}"
