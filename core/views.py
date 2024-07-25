@@ -43,7 +43,7 @@ def post_user(request):
     if(request.method == 'POST'):
         
         new_user = request.data
-        serializer = UserSerializer(new_user)
+        serializer = UserSerializer(data=new_user)
 
         if serializer.is_valid():
             serializer.save()
@@ -87,7 +87,12 @@ def post_tag(request):
     if(request.method == 'POST'):
         
         new_tag = request.data
-        serializer = TagSerializer(new_tag)
+          # Instanciando o serializer com os dados
+        serializer = TagSerializer(data=new_tag)
+        
+        print('----------')
+        print(serializer)
+        print('----------')
 
         if serializer.is_valid():
             serializer.save()
