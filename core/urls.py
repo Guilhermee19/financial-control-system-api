@@ -13,7 +13,7 @@ urlpatterns = [
     path('all-tags/', get_all_tags),
     path('tag-by-id/', get_tag_by_id),
     path('create-tag/', post_tag),
-    path('edit-tag/', put_tag),
+    # path('edit-tag/', put_tag),
     
     # path('tags/', get_all_tags),
     # path('conta/', get_conta),
