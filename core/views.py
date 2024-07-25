@@ -101,7 +101,6 @@ def post_tag(request):
         return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
-
 # @api_view(['GET'])
 # def get_conta(request):
 #     if(request.method == 'GET'):

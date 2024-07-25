@@ -12,6 +12,7 @@ class BaseModel(models.Model):
 
 class Tag(models.Model):
     color = models.CharField(max_length=20)
+    bg_color = models.CharField(max_length=20, default='#f0f2f8')
     nome = models.CharField(max_length=100)
     porcent = models.DecimalField(max_digits=5, decimal_places=2)
 
