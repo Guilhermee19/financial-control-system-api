@@ -5,6 +5,7 @@ from .models import User, Tag, Conta, Finance, Parcela, FinanceEntry
 class UserSerializer(serializers.ModelSerializer):
   class Meta:
     model = User
+    # fields = '__all__'
     fields = ['id', 'last_login', 'username', 'email', 'is_active']
     
 class TagSerializer(serializers.ModelSerializer):
