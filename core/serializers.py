@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import User, Tag, Conta, Finance, Parcela, FinanceEntry
+from .models import *
 
 class UserSerializer(serializers.ModelSerializer):
   class Meta:

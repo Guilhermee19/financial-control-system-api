@@ -10,7 +10,7 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
 
-class Tag(models.Model):
+class Tag(BaseModel):
     color = models.CharField(max_length=20)
     bg_color = models.CharField(max_length=20, default='#f0f2f8')
     nome = models.CharField(max_length=100)
@@ -56,6 +56,7 @@ class Parcela(models.Model):
     finance = models.ForeignKey(Finance, related_name='installments', on_delete=models.CASCADE)
     installment_value = models.DecimalField(max_digits=10, decimal_places=2)
     current_installment = models.IntegerField()
+    date = models.DateField()
 
     def __str__(self):
         return f"{self.finance} - Installment {self.current_installment}"
