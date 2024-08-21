@@ -5,8 +5,8 @@ from .models import *
 class UserSerializer(serializers.ModelSerializer):
   class Meta:
     model = User
-    # fields = '__all__'
-    fields = ['id', 'last_login', 'username', 'email', 'is_active']
+    exclude = ['user_token', 'password', 'forgot_password_expire', 'forgot_password_hash']  # Exclui o campo 'password'
+    # fields = ['id', 'last_login', 'username', 'email', 'is_active']
     
 class TagSerializer(serializers.ModelSerializer):
   class Meta:

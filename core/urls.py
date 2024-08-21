@@ -3,11 +3,14 @@ from django.urls import path
 from .views import *     
 
 urlpatterns = [     
+    path('auth/', CustomAuthToken.as_view()),
+    path('social-network/', social_network),
+    path('get-user/', get_user),
+    
     #CRUD User
     path('all-users/', get_all_users),
     path('user-by-id/', get_user_by_id),
     path('create-user/', post_user),
-    
     
     #CRUD Tag
     path('all-tags/', get_all_tags),

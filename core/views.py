@@ -1,18 +1,112 @@
 from rest_framework.decorators import api_view
-from rest_framework.response import Response
 from rest_framework import status
-from datetime import timedelta
-from django.utils import timezone
-
+from rest_framework.response import Response
+from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.authtoken.models import Token
+from rest_framework.authtoken.views import ObtainAuthToken
 from .models import User, Tag, Conta, Finance, Parcela, FinanceEntry
 from .serializers import UserSerializer, TagSerializer, ContaSerializer, FinanceSerializer, ParcelaSerializer, FinanceEntrySerializer
 
 import json
+import httplib2
+import certifi
+import datetime
+
+class CustomAuthToken(ObtainAuthToken):
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data,
+                                           context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
+        if user.is_active:
+            token, created = Token.objects.get_or_create(user=user)
+            return Response({
+                'token': token.key,
+            })
+        else:
+            return Response({'detail': 'Usuário inativo'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+# @permission_classes([AllowAny])
+def social_network(request):
+
+    social = request.data['social_network']
+    if social == 'Facebook':
+        url = "https://graph.facebook.com/me/?access_token=%s&fields=email" % request.data['token']
+    else:
+        url = "https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=%s" % request.data['token']
+
+    http = httplib2.Http(ca_certs=certifi.where())
+    response = http.request(uri=url, method='GET')
+
+    print(response)
+    
+    try:
+        obj = json.loads(response[1])
+        print(obj)
+        
+        email = obj['email']
+
+    except Exception as e:
+        return Response({"error": "Não foi possível logar com as credenciais informadas."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(email=email)
+
+    except:
+
+        if social == "Google" or social == "google" and "access_token" in request.data:
+
+            #Carregando informações da API:
+
+            url = "https://people.googleapis.com/v1/people/me?personFields=birthdays,names&access_token=%s" % request.data['access_token']
+
+            http = httplib2.Http(ca_certs=certifi.where())
+            response = http.request(uri=url, method='GET')
+
+            obj = json.loads(response[1])
+
+            user = User.objects.create(
+                email = email,
+                is_admin=False
+                # is_active=False
+            )
+
+            if "names" in obj and len(obj["names"]) > 0:
+
+                name = obj["names"][0]["displayName"]
+
+                user.name = name
+
+            user.save()
+
+        else:
+            return Response({"error": "Não foi possível logar com as credenciais informadas!"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+    token, created = Token.objects.get_or_create(user=user)
+    response = {'token': token.key}
+    return Response(response, status=status.HTTP_200_OK)
 
 
 #?  ----------------------
 #?  ------- USERS --------
 #?  ----------------------
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user(request):
+
+    user = request.user
+
+    user_serializer = UserSerializer(user).data
+
+    return Response(user_serializer)
+
+
 @api_view(['GET'])
 def get_all_users(request):
     if(request.method == 'GET'):
