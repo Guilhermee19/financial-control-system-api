@@ -103,16 +103,9 @@ class Conta(BaseModel):
         return self.name
 
 class Finance(BaseModel):
-    TAG_CHOICES = [
-        ('C', 'Compra'),
-        ('G', 'Gasto'),
-        ('CF', 'Conta Fixa'),
-        ('I', 'Investimento'),
-    ]
-    
-    tag = models.CharField(max_length=2, choices=TAG_CHOICES)
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
     date = models.DateField(null=True, blank=True)
-    value = models.DecimalField(max_digits=10, decimal_places=2)
+    value = models.FloatField()
     account = models.ForeignKey(Conta, on_delete=models.CASCADE)
     is_cash = models.BooleanField()
     is_installments = models.BooleanField()
@@ -120,7 +113,7 @@ class Finance(BaseModel):
     description = models.CharField(max_length=255)
 
     def __str__(self):
-        return f"{self.description} - {self.value}"
+        return f"{self.id} - {self.description}"
 
 class Parcela(models.Model):
     finance = models.ForeignKey(Finance, related_name='installments', on_delete=models.CASCADE)

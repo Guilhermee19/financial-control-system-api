@@ -7,6 +7,9 @@ from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from .models import User, Tag, Conta, Finance, Parcela, FinanceEntry
 from .serializers import UserSerializer, TagSerializer, ContaSerializer, FinanceSerializer, ParcelaSerializer, FinanceEntrySerializer
+from rest_framework.pagination import PageNumberPagination
+from datetime import datetime
+from django.db.models import Q
 
 import json
 import httplib2
@@ -154,9 +157,16 @@ def post_user(request):
 @api_view(['GET'])
 def get_all_tags(request):
     if(request.method == 'GET'):
-        tags = Tag.objects.all()
-        serializer = TagSerializer(tags, many=True)
-        return Response(serializer.data)
+        tags = Tag.objects.filter(created_by = request.user)
+    
+        # PAGINATION
+        paginator = PageNumberPagination()
+        paginator.page_size = request.query_params.get('page_size', 10)
+        paginator.page_query_param = 'page'
+        
+        serializer = TagSerializer(paginator.paginate_queryset(tags, request), many=True).data
+        return paginator.get_paginated_response(serializer)
+
     
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
@@ -302,11 +312,26 @@ def delete_conta(request, id):
 #?  -------- FINANCE ---------
 #?  -----------------------
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_all_finances(request):
     if(request.method == 'GET'):
-        finances = Finance.objects.all()
-        serializer = FinanceSerializer(finances, many=True)
-        return Response(serializer.data)
+        start_date  = request.GET.get('start_date')
+        end_date    = request.GET.get('end_date')
+
+        # Apply the date filter to the queryset
+        finances = Finance.objects.filter(
+            created_by      = request.user,
+            created_at__gte = start_date,
+            created_at__lt  = end_date
+        )
+        
+        # PAGINATION
+        paginator = PageNumberPagination()
+        paginator.page_size = request.query_params.get('page_size', 10)
+        paginator.page_query_param = 'page'
+
+        serializer = FinanceSerializer(paginator.paginate_queryset(finances, request), many=True).data
+        return paginator.get_paginated_response(serializer)
     
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
@@ -333,6 +358,8 @@ def post_finance(request):
     if(request.method == 'POST'):
         
         new_finance = request.data
+        
+        print(new_finance)
         
         # total_amount = request.data.get('value')
         # num_installments = request.data.get('number_of_installments')
