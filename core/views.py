@@ -315,6 +315,7 @@ def delete_conta(request, id):
 @permission_classes([IsAuthenticated])
 def get_all_finances(request):
     if(request.method == 'GET'):
+        
         start_date  = request.GET.get('start_date')
         end_date    = request.GET.get('end_date')
 
@@ -354,44 +355,34 @@ def get_finance_by_id(request):
         
         
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def post_finance(request):
     if(request.method == 'POST'):
         
-        new_finance = request.data
+        user = request.user
+        new_finance = request.data.copy()  # Crie uma cópia dos dados do request
         
+         # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
+        new_finance['created_by'] = user.id
+        new_finance['updated_by'] = user.id
+        
+        print('\n')
         print(new_finance)
+        print('\n')
         
-        # total_amount = request.data.get('value')
-        # num_installments = request.data.get('number_of_installments')
-        # installment_amount = float(total_amount) / int(num_installments)
-        
-        # # Validação
-        # if not total_amount or not num_installments:
-        #     return Response({'detail': 'Total amount and number of installments are required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # print(installment_amount)
-        
+       # Serializar os dados recebidos
         serializer = FinanceSerializer(data=new_finance)
-        
+
+        # Verifique se os dados são válidos
         if serializer.is_valid():
-            serializer.save()
-            
-            # # Criar as parcelas
-            # start_date = timezone.now().date()  # Data inicial pode ser a data atual
-            # for i in range(int(num_installments)):
-            #     due_date = start_date + timedelta(days=(i + 1) * 30)  # Parcelas mensais, ajuste conforme necessário
-                
-            #     Parcela.objects.create(
-            #         finance=serializer.data.get('id'),
-            #         installment_value=installment_amount,
-            #         current_installment=i
-            #         date=due_date
-            #     )
-                
-                
+            serializer.save()  # Salve o novo objeto no banco de dados
             return Response(serializer.data, status=status.HTTP_201_CREATED)
        
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+        # Se os dados não forem válidos, retorne os detalhes dos erros
+        return Response({
+            "errors": serializer.errors, 
+            "message": "Erro ao validar os dados de entrada."
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['PATCH'])
 def update_finance(request):
