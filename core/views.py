@@ -275,15 +275,25 @@ def get_conta_by_id(request):
 @api_view(['POST'])
 def post_conta(request):
     if(request.method == 'POST'):
+        user = request.user
         
-        new_conta = request.data
+        new_conta = request.data.copy()
+        
+        # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
+        new_conta['created_by'] = user.id
+        new_conta['updated_by'] = user.id
+
         serializer = ContaSerializer(data=new_conta)
         
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
        
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+        # Se os dados não forem válidos, retorne os detalhes dos erros
+        return Response({
+            "errors": serializer.errors, 
+            "message": "Erro ao validar os dados de entrada."
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['PATCH'])
 def update_conta(request):
@@ -374,10 +384,6 @@ def post_finance(request):
         # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
         new_finance['created_by'] = user.id
         new_finance['updated_by'] = user.id
-        
-        print('\n')
-        print(new_finance)
-        print('\n')
         
         # Serializar os dados recebidos
         serializer = FinanceSerializer(data=new_finance)
