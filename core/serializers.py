@@ -29,11 +29,23 @@ class FinanceTagSerializer(serializers.ModelSerializer):
     fields = ['id', 'bg_color', 'color', 'nome', 'porcent']  # Exclui o campo 'password'
     
 class FinanceSerializer(serializers.ModelSerializer):
-  account = FinanceContaSerializer()  # Aqui você usa o serializer aninhado
-  tag = FinanceTagSerializer()  # Aqui você usa o serializer aninhado
+  account_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
+  tag_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
+  
+  def get_account_obj(self, obj):
+    if obj.account:
+        return FinanceContaSerializer(obj.account).data
+    return None
+  
+  def get_tag_obj(self, obj):
+    if obj.tag:
+        return FinanceTagSerializer(obj.tag).data
+    return None
+  
   class Meta:
     model = Finance
     fields = '__all__'
+    
     
 class ParcelaSerializer(serializers.ModelSerializer):
   class Meta:

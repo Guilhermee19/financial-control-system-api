@@ -6,10 +6,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from .models import User, Tag, Conta, Finance, Parcela, FinanceEntry
-from .serializers import UserSerializer, TagSerializer, ContaSerializer, FinanceSerializer, ParcelaSerializer, FinanceEntrySerializer
+from .serializers import *
 from rest_framework.pagination import PageNumberPagination
-from datetime import datetime
-from django.db.models import Q
 
 import json
 import httplib2
@@ -239,9 +237,20 @@ def delete_tag(request, id):
 @api_view(['GET'])
 def get_all_contas(request):
     if(request.method == 'GET'):
-        contas = Conta.objects.all()
-        serializer = ContaSerializer(contas, many=True)
-        return Response(serializer.data)
+        accounts = Conta.objects.all()
+        all  = request.GET.get('all')
+
+        if all:         
+            serializer = ContaSerializer(accounts, many=True)
+            return Response(serializer.data)
+        else:
+            # PAGINATION
+            paginator = PageNumberPagination()
+            paginator.page_size = request.query_params.get('page_size', 10)
+            paginator.page_query_param = 'page'
+
+            serializer = ContaSerializer(paginator.paginate_queryset(accounts, request), many=True).data
+            return paginator.get_paginated_response(serializer)
     
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
@@ -362,7 +371,7 @@ def post_finance(request):
         user = request.user
         new_finance = request.data.copy()  # Crie uma cópia dos dados do request
         
-         # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
+        # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
         new_finance['created_by'] = user.id
         new_finance['updated_by'] = user.id
         
@@ -370,7 +379,7 @@ def post_finance(request):
         print(new_finance)
         print('\n')
         
-       # Serializar os dados recebidos
+        # Serializar os dados recebidos
         serializer = FinanceSerializer(data=new_finance)
 
         # Verifique se os dados são válidos

@@ -20,11 +20,11 @@ urlpatterns = [
     path('delete-tag/<int:id>/', delete_tag),
     
     #CRUD Conta
-    path('all-contas/', get_all_contas),
-    path('conta-by-id/', get_conta_by_id),
-    path('create-conta/', post_conta),
-    path('edit-conta/', update_conta),
-    path('delete-conta/<int:id>/', delete_conta),
+    path('all-accounts/', get_all_contas),
+    path('account-by-id/', get_conta_by_id),
+    path('create-account/', post_conta),
+    path('edit-account/', update_conta),
+    path('delete-account/<int:id>/', delete_conta),
     
     #CRUD Finance
     path('all-finances/', get_all_finances),
