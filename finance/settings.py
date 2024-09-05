@@ -28,6 +28,7 @@ DEBUG = True
 ALLOWED_HOSTS = [
     '127.0.0.1', 
     '5.252.54.146', 
+    'api.iamgui.dev',
     'fcs.iamgui.dev', 
     'localhost:4200'
 ]
