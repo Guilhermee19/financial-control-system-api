@@ -113,13 +113,14 @@ class Finance(BaseModel):
     description = models.CharField(max_length=255)
 
     def __str__(self):
-        return f"{self.id} - {self.description}"
+        return f"{self.id} - {self.description} ( {self.account.name} )"
 
-class Parcela(models.Model):
+class Parcela(BaseModel):
     finance = models.ForeignKey(Finance, related_name='installments', on_delete=models.CASCADE)
-    installment_value = models.DecimalField(max_digits=10, decimal_places=2)
+    installment_value = models.FloatField()
     current_installment = models.IntegerField()
     date = models.DateField(null=True, blank=True)
+    is_paid = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.finance} - Installment {self.current_installment}"

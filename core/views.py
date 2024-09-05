@@ -8,6 +8,8 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from .models import User, Tag, Conta, Finance, Parcela, FinanceEntry
 from .serializers import *
 from rest_framework.pagination import PageNumberPagination
+import datetime  # Importar o módulo completo para evitar conflito
+import calendar
 
 import json
 import httplib2
@@ -282,6 +284,8 @@ def post_conta(request):
         # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
         new_conta['created_by'] = user.id
         new_conta['updated_by'] = user.id
+        new_conta['balance_debit'] = 0
+        new_conta['balance_credit'] = 0
 
         serializer = ContaSerializer(data=new_conta)
         
@@ -338,11 +342,19 @@ def get_all_finances(request):
         start_date  = request.GET.get('start_date')
         end_date    = request.GET.get('end_date')
 
-        # Apply the date filter to the queryset
+        # Filtrar parcelas dentro do intervalo de datas
+        installments = Parcela.objects.filter(
+            date__gte   = start_date,
+            date__lt    = end_date
+        ).values_list('finance', flat=True).distinct()
+        
+        # Ordenar por data
+        installments_order = installments.order_by('date')
+
+        # Filtrar finances que possuem as parcelas filtradas
         finances = Finance.objects.filter(
-            created_by      = request.user,
-            created_at__gte = start_date,
-            created_at__lt  = end_date
+            id__in      = installments_order,
+            created_by  = request.user
         )
         
         # PAGINATION
@@ -351,6 +363,14 @@ def get_all_finances(request):
         paginator.page_query_param = 'page'
 
         serializer = FinanceSerializer(paginator.paginate_queryset(finances, request), many=True).data
+        for item in serializer:
+            parcela = Parcela.objects.filter(   
+                finance_id = item['id'],
+                date__gte   = start_date,
+                date__lt    = end_date
+            ).first()
+            
+            item['parcela'] =  ParcelaSerializer(parcela).data
         return paginator.get_paginated_response(serializer)
     
     return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -376,27 +396,86 @@ def get_finance_by_id(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def post_finance(request):
-    if(request.method == 'POST'):
+    if request.method == 'POST':
         
+        # Obtenha o usuário autenticado
         user = request.user
-        new_finance = request.data.copy()  # Crie uma cópia dos dados do request
         
-        # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
+        # Crie uma cópia dos dados recebidos no request para o Finance
+        new_finance = request.data.copy()
+        
+        # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by' do Finance
         new_finance['created_by'] = user.id
         new_finance['updated_by'] = user.id
         
-        # Serializar os dados recebidos
-        serializer = FinanceSerializer(data=new_finance)
+ 
+        
+        # Serializar os dados recebidos para Finance
+        finance_serializer = FinanceSerializer(data=new_finance)
 
-        # Verifique se os dados são válidos
-        if serializer.is_valid():
-            serializer.save()  # Salve o novo objeto no banco de dados
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-       
-        # Se os dados não forem válidos, retorne os detalhes dos erros
+        # Verifique se os dados do Finance são válidos
+        if finance_serializer.is_valid():
+            # Salve o novo objeto Finance no banco de dados
+            finance = finance_serializer.save()
+
+            # Verifique se a variável 'number_of_installments' foi enviada e é maior que 1
+            number_of_installments = int(request.data.get('number_of_installments', 1))
+
+            if number_of_installments > 0:
+                # Obtenha informações relevantes do Finance
+                total_amount = float(new_finance['value'])  # Valor total do Finance
+                installment_value = total_amount / number_of_installments  # Valor de cada parcela
+                
+                # Pegar a data separando dia, mês e ano
+                due_date_str = new_finance.get('date', str(datetime.datetime.now().date()))  # Data inicial como string
+                due_date = datetime.datetime.strptime(due_date_str, '%Y-%m-%d')  # Convertendo para objeto datetime
+                day = due_date.day
+                month = due_date.month
+                year = due_date.year
+
+                # Crie as parcelas automaticamente
+                for i in range(number_of_installments):
+                    # Ajuste o mês e ano para a parcela
+                    new_month = (month + i) % 12 or 12  # Garantir que o mês fique entre 1 e 12
+                    new_year = year + (month + i - 1) // 12  # Ajustar o ano conforme os meses aumentam
+
+                    # Garantir que o dia seja válido para o mês (caso, por exemplo, fevereiro tenha menos dias)
+                    last_day_of_new_month = calendar.monthrange(new_year, new_month)[1]
+                    new_day = min(day, last_day_of_new_month)  # Ajusta o dia se for maior que o último dia do mês
+
+                    # Montar a nova data para a parcela
+                    new_due_date = datetime.datetime(new_year, new_month, new_day).date()
+
+                    parcela_data = {
+                        'finance': finance.id,
+                        'installment_value': installment_value,
+                        'current_installment': i + 1,
+                        'date': new_due_date,  # Definindo a data da parcela
+                        'is_paid': False,
+                        'created_by': user.id,
+                        'updated_by': user.id
+                         # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
+                    }
+
+                    # Serializar e validar cada parcela
+                    parcela_serializer = ParcelaSerializer(data=parcela_data)
+                    
+                    if parcela_serializer.is_valid():
+                        parcela_serializer.save()
+                    else:
+                        # Caso algum dado da parcela seja inválido, retorne os erros
+                        return Response({
+                            "errors": parcela_serializer.errors,
+                            "message": "Erro ao validar os dados da parcela."
+                        }, status=status.HTTP_400_BAD_REQUEST)
+
+            # Retorne o finance criado com status 201 CREATED
+            return Response(finance_serializer.data, status=status.HTTP_201_CREATED)
+
+        # Se os dados do Finance não forem válidos, retorne os detalhes dos erros
         return Response({
-            "errors": serializer.errors, 
-            "message": "Erro ao validar os dados de entrada."
+            "errors": finance_serializer.errors,
+            "message": "Erro ao validar os dados do finance."
         }, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['PATCH'])
@@ -431,6 +510,45 @@ def delete_finance(request, id):
     return Response({'worked': True})
 
 
+#?  -----------------------
+#?  -------- PARCELA ---------
+#?  -----------------------
+@api_view(['GET'])
+def get_parcela(request):
+    if(request.method == 'GET'):
+        parcelas = Parcela.objects.all()
+        serializer = ParcelaSerializer(parcelas, many=True)
+        return Response(serializer.data)
+    
+    return Response(status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def post_parcela(request):
+    if(request.method == 'POST'):
+        
+        user = request.user
+        new_parcela = request.data.copy()  # Crie uma cópia dos dados do request
+        
+        # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
+        new_parcela['created_by'] = user.id
+        new_parcela['updated_by'] = user.id
+        
+        # Serializar os dados recebidos
+        serializer = ParcelaSerializer(data=new_parcela)
+
+        # Verifique se os dados são válidos
+        if serializer.is_valid():
+            serializer.save()  # Salve o novo objeto no banco de dados
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+       
+        # Se os dados não forem válidos, retorne os detalhes dos erros
+        return Response({
+            "errors": serializer.errors, 
+            "message": "Erro ao validar os dados de entrada."
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
 # @api_view(['GET'])
 # def get_conta(request):
 #     if(request.method == 'GET'):

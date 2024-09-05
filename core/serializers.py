@@ -31,6 +31,11 @@ class FinanceTagSerializer(serializers.ModelSerializer):
 class FinanceSerializer(serializers.ModelSerializer):
   account_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
   tag_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
+  # parcelas = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
+  
+  # def get_parcelas(self, obj):
+  #   parcela = Parcela.objects.filter(finance_id = obj.id)
+  #   return ParcelaSerializer(parcela, many = True).data
   
   def get_account_obj(self, obj):
     if obj.account:
