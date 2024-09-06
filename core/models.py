@@ -106,14 +106,17 @@ class Finance(BaseModel):
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
     date = models.DateField(null=True, blank=True)
     value = models.FloatField()
-    account = models.ForeignKey(Conta, on_delete=models.CASCADE)
+    account = models.ForeignKey(Conta, null=True, on_delete=models.CASCADE)
     is_cash = models.BooleanField()
     is_installments = models.BooleanField()
     number_of_installments = models.IntegerField()
     description = models.CharField(max_length=255)
 
     def __str__(self):
-        return f"{self.id} - {self.description} ( {self.account.name} )"
+        if(self.account):
+            return f"{self.id} - {self.description} ( {self.account.name} )"
+        else:
+            return f"{self.id} - {self.description}"
 
 class Parcela(BaseModel):
     finance = models.ForeignKey(Finance, related_name='installments', on_delete=models.CASCADE)
