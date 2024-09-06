@@ -35,6 +35,10 @@ ALLOWED_HOSTS = [
     'localhost:4200'
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://finance-api.iamgui.dev',
+]
+
 CORS_ORIGIN_ALLOW_ALL = True
 
 AUTH_USER_MODEL = 'core.User'
