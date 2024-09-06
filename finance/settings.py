@@ -33,12 +33,14 @@ ALLOWED_HOSTS = [
     'localhost:4200'
 ]
 
+CORS_ORIGIN_ALLOW_ALL = True
 
 AUTH_USER_MODEL = 'core.User'
 
 # Application definition
 
 INSTALLED_APPS = [
+    'corsheaders',
     'rest_framework.authtoken',
     'rest_framework',
     'django.contrib.admin',
