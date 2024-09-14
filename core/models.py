@@ -44,7 +44,7 @@ class User(AbstractBaseUser):
     name = models.CharField(max_length=255, null=True, blank=True)
     is_admin = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    is_deleted = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
     forgot_password_hash = models.CharField(max_length=255, null=True, blank=True)
     forgot_password_expire = models.DateTimeField(null=True, blank=True)
     user_token = models.CharField(max_length=255, null=True, blank=True)
@@ -81,10 +81,17 @@ class BaseModel(models.Model):
         abstract = True
 
 class Tag(BaseModel):
+    TYPE_CHOICES = [
+        ('ENTRY', 'ENTRY'),
+        ('OUTPUT', 'OUTPUT')
+    ]
+      
     color = models.CharField(max_length=20)
     bg_color = models.CharField(max_length=20, default='#f0f2f8')
     nome = models.CharField(max_length=100)
-    porcent = models.DecimalField(max_digits=5, decimal_places=2)
+    percent = models.DecimalField(max_digits=5, decimal_places=2)
+    type = models.CharField(max_length=10, default='OUTPUT', choices=TYPE_CHOICES)
+    
 
     def __str__(self):
         return self.nome

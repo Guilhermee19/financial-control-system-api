@@ -138,6 +138,7 @@ def get_user_by_id(request):
         
         
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def post_user(request):
     if(request.method == 'POST'):
         
@@ -148,7 +149,11 @@ def post_user(request):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
        
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+        # Se os dados do Finance não forem válidos, retorne os detalhes dos erros
+        return Response({
+            "errors": serializer.errors,
+            "message": "Erro ao validar os dados do finance."
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
 #?  -----------------------
