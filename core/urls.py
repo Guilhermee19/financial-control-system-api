@@ -35,5 +35,6 @@ urlpatterns = [
     
     #? CRUD Parcela
     path('all-parcela/', get_parcela),
+    path('pay-instalment/', pay_instalment),
     # path('finance_entry/', get_finance_entry),
 ]                                           

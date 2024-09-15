@@ -582,6 +582,28 @@ def get_parcela(request):
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(['PATCH'])
+def pay_instalment(request):
+    if(request.method == 'PATCH'):
+        if not 'id'in request.data:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            finance = Finance.objects.get(id=int(request.data['id']))
+            finance_serializer = FinanceSerializer(finance, data=request.data, partial=True)
+
+            if finance_serializer.is_valid():
+                finance_serializer.save()
+            else:
+                return Response(finance_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(finance_serializer.data)
+    
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def post_parcela(request):
