@@ -26,7 +26,7 @@ class FinanceContaSerializer(serializers.ModelSerializer):
 class FinanceTagSerializer(serializers.ModelSerializer):
   class Meta:
     model = Tag
-    fields = ['id', 'bg_color', 'color', 'nome', 'porcent']  # Exclui o campo 'password'
+    fields = ['id', 'bg_color', 'color', 'name', 'porcent']  # Exclui o campo 'password'
     
 class FinanceSerializer(serializers.ModelSerializer):
   account_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado

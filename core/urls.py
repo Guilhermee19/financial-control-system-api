@@ -3,7 +3,7 @@ from django.urls import path
 from .views import *     
 
 urlpatterns = [     
-    path('auth/', CustomAuthToken.as_view()),
+    path('auth/', auth_user),
     path('social-network/', social_network),
     path('get-user/', get_user),
     
@@ -25,13 +25,6 @@ urlpatterns = [
     path('create-account/', post_conta),
     path('edit-account/', update_conta),
     path('delete-account/<int:id>/', delete_conta),
-    
-    #? CRUD Finance
-    path('all-finances/', get_all_finances),
-    path('finance-by-id/', get_finance_by_id),
-    path('create-finance/', post_finance),
-    path('edit-finance/', update_finance),
-    path('delete-finance/<int:id>/', delete_finance),
     
     #? CRUD Finance
     path('all-finances/', get_all_finances),

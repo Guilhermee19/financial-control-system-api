@@ -88,13 +88,13 @@ class Tag(BaseModel):
       
     color = models.CharField(max_length=20)
     bg_color = models.CharField(max_length=20, default='#f0f2f8')
-    nome = models.CharField(max_length=100)
+    name = models.CharField(max_length=100)
     percent = models.DecimalField(max_digits=5, decimal_places=2)
     type = models.CharField(max_length=10, default='OUTPUT', choices=TYPE_CHOICES)
     
 
     def __str__(self):
-        return self.nome
+        return self.name
 
 class Conta(BaseModel):
     name = models.CharField(max_length=100)

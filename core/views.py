@@ -16,20 +16,53 @@ import httplib2
 import certifi
 import datetime
 
-class CustomAuthToken(ObtainAuthToken):
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def auth_user(request):
 
-    def post(self, request, *args, **kwargs):
-        serializer = self.serializer_class(data=request.data,
-                                           context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data['user']
-        if user.is_active:
-            token, created = Token.objects.get_or_create(user=user)
-            return Response({
-                'token': token.key,
-            })
+    if not 'email' in request.data:
+        return Response({'detail': 'Falta o parâmetro email'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not 'password' in request.data:
+        return Response({'detail': 'Falta o parâmetro password'}, status=status.HTTP_400_BAD_REQUEST)
+
+    print(request.data)
+    
+    try:
+        user = User.objects.get(
+            email__iexact=request.data["email"], is_deleted=False)
+        
+    except Exception as e:
+        return Response({"detail": "E-mail ou senha incorretos! 1"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if user.is_active == True:
+
+        if user.is_deleted == True:
+            return Response({"detail": "Usuário deletado!"}, status=status.HTTP_400_BAD_REQUEST)
+
+        print(user)
+        print(user.check_password(request.data["password"]))
+        
+        if user.check_password(request.data["password"]):
+
+            try:
+                token, created = Token.objects.get_or_create(user=user)
+
+                # update_last_login(None, user)
+
+                return Response(
+                    {
+                        "token": token.key,
+                    }
+                )
+
+            except Exception as e:
+                return Response({"detail": "E-mail ou senha incorretos! 2"}, status=status.HTTP_400_BAD_REQUEST)
+
         else:
-            return Response({'detail': 'Usuário inativo'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "E-mail ou senha incorretos! 3"}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        return Response({"detail": "E-mail ou senha incorretos! 4"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['POST'])
@@ -145,9 +178,16 @@ def post_user(request):
         new_user = request.data
         serializer = UserSerializer(data=new_user)
 
+
         if serializer.is_valid():
-            serializer.save()
+            item = serializer.save()
+        else:
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+       
+        item.set_password(request.data["password"])
+        item.save()
+       
+        serializer = UserSerializer(item).data
        
         # Se os dados do Finance não forem válidos, retorne os detalhes dos erros
         return Response({
@@ -197,14 +237,28 @@ def get_tag_by_id(request):
 def post_tag(request):
     if(request.method == 'POST'):
         
+        # Obtenha o usuário autenticado
+        user = request.user
+        
         new_tag = request.data
+        
+        # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by' do Finance
+        new_tag['created_by'] = user.id
+        new_tag['updated_by'] = user.id
+
+        # Serializar os dados recebidos para Finance
         serializer = TagSerializer(data=new_tag)
         
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
        
-        return Response(status=status.HTTP_400_BAD_REQUEST)
+        # Se os dados do Finance não forem válidos, retorne os detalhes dos erros
+        return Response({
+            "errors": serializer.errors,
+            "message": "Erro ao validar os dados do finance."
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
 
 @api_view(['PATCH'])
 def update_tag(request):
