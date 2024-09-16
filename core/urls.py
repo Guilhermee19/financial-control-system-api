@@ -16,7 +16,7 @@ urlpatterns = [
     path('all-tags/', get_all_tags),
     path('tag-by-id/', get_tag_by_id),
     path('create-tag/', post_tag),
-    path('edit-tag/', update_tag),
+    path('edit-tag/<int:id>/', update_tag),
     path('delete-tag/<int:id>/', delete_tag),
     
     #? CRUD Conta

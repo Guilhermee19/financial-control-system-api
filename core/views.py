@@ -261,26 +261,23 @@ def post_tag(request):
     
 
 @api_view(['PATCH'])
-def update_tag(request):
-    if(request.method == 'PATCH'):
-        if not 'id'in request.data:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+def update_tag(request, id):  # Recebe o id diretamente da URL
+    try:
+        # Busca a tag pelo ID capturado da URL
+        tag = Tag.objects.get(id=id)
+    except Tag.DoesNotExist:
+        return Response({'error': 'Tag not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            tag = Tag.objects.get(id=int(request.data['id']))
-            tag_serializer = TagSerializer(tag, data=request.data, partial=True)
+    # Faz a atualização parcial da tag
+    tag_serializer = TagSerializer(tag, data=request.data, partial=True)
 
-            if tag_serializer.is_valid():
-                tag_serializer.save()
-            else:
-                return Response(tag_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        except:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-
+    if tag_serializer.is_valid():
+        tag_serializer.save()
         return Response(tag_serializer.data)
-
-
+    else:
+        return Response(tag_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
 @api_view(['DELETE'])
 def delete_tag(request, id):
     try:
@@ -298,7 +295,11 @@ def delete_tag(request, id):
 @api_view(['GET'])
 def get_all_contas(request):
     if(request.method == 'GET'):
-        accounts = Conta.objects.all()
+        # Filtrar finances que possuem as parcelas filtradas
+        accounts = Conta.objects.filter(
+            created_by  = request.user
+        )
+        
         all  = request.GET.get('all')
 
         if all:         
@@ -466,8 +467,6 @@ def post_finance(request):
         # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by' do Finance
         new_finance['created_by'] = user.id
         new_finance['updated_by'] = user.id
-        
- 
         
         # Serializar os dados recebidos para Finance
         finance_serializer = FinanceSerializer(data=new_finance)
