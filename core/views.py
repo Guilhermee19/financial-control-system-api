@@ -181,13 +181,12 @@ def post_user(request):
 
         if serializer.is_valid():
             item = serializer.save()
-        else:
+            item.set_password(request.data["password"])
+            item.save()
+        
+            serializer = UserSerializer(item).data
+        
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-       
-        item.set_password(request.data["password"])
-        item.save()
-       
-        serializer = UserSerializer(item).data
        
         # Se os dados do Finance não forem válidos, retorne os detalhes dos erros
         return Response({
