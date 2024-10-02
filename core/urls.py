@@ -12,12 +12,12 @@ urlpatterns = [
     path('user-by-id/', get_user_by_id),
     path('create-user/', post_user),
     
-    #? CRUD Tag
-    path('all-tags/', get_all_tags),
-    path('tag-by-id/', get_tag_by_id),
-    path('create-tag/', post_tag),
-    path('edit-tag/<int:id>/', update_tag),
-    path('delete-tag/<int:id>/', delete_tag),
+    #? CRUD Category
+    path('all-categories/', get_all_categories),
+    path('category-by-id/', get_category_by_id),
+    path('create-category/', post_category),
+    path('edit-category/<int:id>/', update_category),
+    path('delete-category/<int:id>/', delete_category),
     
     #? CRUD Conta
     path('all-accounts/', get_all_contas),
@@ -33,8 +33,11 @@ urlpatterns = [
     path('edit-finance/', update_finance),
     path('delete-finance/<int:id>/', delete_finance),
     
-    #? CRUD Parcela
-    path('all-parcela/', get_parcela),
-    path('pay-instalment/', pay_instalment),
+    #? CRUD Installment
+    path('all-installment/', get_installment),
+    # path('pay-installment/', post_installment),
     # path('finance_entry/', get_finance_entry),
+    
+    #? Dashboard
+    path('get-dashboard/', get_dashboard),
 ]                                           

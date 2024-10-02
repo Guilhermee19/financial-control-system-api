@@ -1,3 +1,5 @@
+from django.http import JsonResponse
+from django.db.models import Sum
 from rest_framework.decorators import api_view
 from rest_framework import status
 from rest_framework.response import Response
@@ -5,9 +7,9 @@ from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
-from .models import User, Tag, Conta, Finance, Parcela, FinanceEntry
-from .serializers import *
 from rest_framework.pagination import PageNumberPagination
+from .models import User, Category, Conta, Finance, Installment
+from .serializers import *
 import datetime  # Importar o módulo completo para evitar conflito
 import calendar
 
@@ -196,19 +198,19 @@ def post_user(request):
 
 
 #?  -----------------------
-#?  -------- TAGS ---------
+#?  -------- CATERIES ---------
 #?  -----------------------
 @api_view(['GET'])
-def get_all_tags(request):
+def get_all_categories(request):
     if(request.method == 'GET'):
-        tags = Tag.objects.filter(created_by = request.user)
+        categories = Category.objects.filter(created_by = request.user)
     
         # PAGINATION
         paginator = PageNumberPagination()
         paginator.page_size = request.query_params.get('page_size', 10)
         paginator.page_query_param = 'page'
         
-        serializer = TagSerializer(paginator.paginate_queryset(tags, request), many=True).data
+        serializer = CategorySerializer(paginator.paginate_queryset(categories, request), many=True).data
         return paginator.get_paginated_response(serializer)
 
     
@@ -216,7 +218,7 @@ def get_all_tags(request):
 
 
 @api_view(['GET'])
-def get_tag_by_id(request):
+def get_category_by_id(request):
    
     if "id" not in request.GET:
         return Response({"error": "id is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -224,29 +226,29 @@ def get_tag_by_id(request):
     print(request.GET["id"])
     
     try: 
-       tag = Tag.objects.get(id=request.GET["id"])
+       category = Category.objects.get(id=request.GET["id"])
     except:
-        return Response({"error": "Tag not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response({"error": "Category not found"}, status=status.HTTP_404_NOT_FOUND)
     
-    serializer = TagSerializer(tag)
+    serializer = CategorySerializer(category)
     return Response(serializer.data, status=status.HTTP_200_OK)
         
         
 @api_view(['POST'])
-def post_tag(request):
+def post_category(request):
     if(request.method == 'POST'):
         
         # Obtenha o usuário autenticado
         user = request.user
         
-        new_tag = request.data
+        new_category = request.data
         
         # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by' do Finance
-        new_tag['created_by'] = user.id
-        new_tag['updated_by'] = user.id
+        new_category['created_by'] = user.id
+        new_category['updated_by'] = user.id
 
         # Serializar os dados recebidos para Finance
-        serializer = TagSerializer(data=new_tag)
+        serializer = CategorySerializer(data=new_category)
         
         if serializer.is_valid():
             serializer.save()
@@ -260,30 +262,30 @@ def post_tag(request):
     
 
 @api_view(['PATCH'])
-def update_tag(request, id):  # Recebe o id diretamente da URL
+def update_category(request, id):  # Recebe o id diretamente da URL
     try:
-        # Busca a tag pelo ID capturado da URL
-        tag = Tag.objects.get(id=id)
-    except Tag.DoesNotExist:
-        return Response({'error': 'Tag not found'}, status=status.HTTP_404_NOT_FOUND)
+        # Busca a category pelo ID capturado da URL
+        category = Category.objects.get(id=id)
+    except Category.DoesNotExist:
+        return Response({'error': 'Category not found'}, status=status.HTTP_404_NOT_FOUND)
 
-    # Faz a atualização parcial da tag
-    tag_serializer = TagSerializer(tag, data=request.data, partial=True)
+    # Faz a atualização parcial da category
+    category_serializer = CategorySerializer(category, data=request.data, partial=True)
 
-    if tag_serializer.is_valid():
-        tag_serializer.save()
-        return Response(tag_serializer.data)
+    if category_serializer.is_valid():
+        category_serializer.save()
+        return Response(category_serializer.data)
     else:
-        return Response(tag_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(category_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     
 @api_view(['DELETE'])
-def delete_tag(request, id):
+def delete_category(request, id):
     try:
-        tag = Tag.objects.get(id=int(id))
-        tag.delete()
+        category = Category.objects.get(id=int(id))
+        category.delete()
     except:
-        return Response({'detail': 'Tag not found'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': 'Category not found'}, status=status.HTTP_400_BAD_REQUEST)
 
     return Response({'worked': True})
 
@@ -294,7 +296,7 @@ def delete_tag(request, id):
 @api_view(['GET'])
 def get_all_contas(request):
     if(request.method == 'GET'):
-        # Filtrar finances que possuem as parcelas filtradas
+        # Filtrar finances que possuem as Installments filtradas
         accounts = Conta.objects.filter(
             created_by  = request.user
         )
@@ -402,7 +404,7 @@ def get_all_finances(request):
         end_date    = request.GET.get('end_date')
 
         # Filtrar parcelas dentro do intervalo de datas
-        installments = Parcela.objects.filter(
+        installments = Installment.objects.filter(
             date__gte   = start_date,
             date__lt    = end_date
         ).values_list('finance', flat=True).distinct()
@@ -423,13 +425,13 @@ def get_all_finances(request):
 
         serializer = FinanceSerializer(paginator.paginate_queryset(finances, request), many=True).data
         for item in serializer:
-            parcela = Parcela.objects.filter(   
+            installment = Installment.objects.filter(   
                 finance_id = item['id'],
                 date__gte   = start_date,
                 date__lt    = end_date
             ).first()
             
-            item['parcela'] =  ParcelaSerializer(parcela).data
+            item['installment'] =  InstallmentSerializer(installment).data
         return paginator.get_paginated_response(serializer)
     
     return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -440,8 +442,6 @@ def get_finance_by_id(request):
    
     if "id" not in request.GET:
         return Response({"error": "id is required"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    print(request.GET["id"])
     
     try: 
        finance = Finance.objects.get(id=request.GET["id"])
@@ -477,11 +477,12 @@ def post_finance(request):
 
             # Verifique se a variável 'number_of_installments' foi enviada e é maior que 1
             number_of_installments = int(request.data.get('number_of_installments', 1))
+            recurrence = request.data.get('recurrence')
 
-            if number_of_installments > 0:
+            if recurrence == 'INSTALLMENTS' and number_of_installments > 0:
                 # Obtenha informações relevantes do Finance
                 total_amount = float(new_finance['value'])  # Valor total do Finance
-                installment_value = total_amount / number_of_installments  # Valor de cada parcela
+                installment_value = total_amount / number_of_installments  # Valor de cada Installment
                 
                 # Pegar a data separando dia, mês e ano
                 due_date_str = new_finance.get('date', str(datetime.datetime.now().date()))  # Data inicial como string
@@ -490,9 +491,9 @@ def post_finance(request):
                 month = due_date.month
                 year = due_date.year
 
-                # Crie as parcelas automaticamente
+                # Crie as Installments automaticamente
                 for i in range(number_of_installments):
-                    # Ajuste o mês e ano para a parcela
+                    # Ajuste o mês e ano para a Installment
                     new_month = (month + i) % 12 or 12  # Garantir que o mês fique entre 1 e 12
                     new_year = year + (month + i - 1) // 12  # Ajustar o ano conforme os meses aumentam
 
@@ -500,32 +501,108 @@ def post_finance(request):
                     last_day_of_new_month = calendar.monthrange(new_year, new_month)[1]
                     new_day = min(day, last_day_of_new_month)  # Ajusta o dia se for maior que o último dia do mês
 
-                    # Montar a nova data para a parcela
+                    # Montar a nova data para a Installment
                     new_due_date = datetime.datetime(new_year, new_month, new_day).date()
 
-                    parcela_data = {
+                    Installment_data = {
                         'finance': finance.id,
                         'installment_value': installment_value,
                         'current_installment': i + 1,
-                        'date': new_due_date,  # Definindo a data da parcela
+                        'date': new_due_date,  # Definindo a data da Installment
                         'is_paid': False,
                         'created_by': user.id,
                         'updated_by': user.id
                          # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
                     }
 
-                    # Serializar e validar cada parcela
-                    parcela_serializer = ParcelaSerializer(data=parcela_data)
+                    # Serializar e validar cada Installment
+                    Installment_serializer = InstallmentSerializer(data=Installment_data)
                     
-                    if parcela_serializer.is_valid():
-                        parcela_serializer.save()
+                    if Installment_serializer.is_valid():
+                        Installment_serializer.save()
                     else:
-                        # Caso algum dado da parcela seja inválido, retorne os erros
+                        # Caso algum dado da Installment seja inválido, retorne os erros
                         return Response({
-                            "errors": parcela_serializer.errors,
-                            "message": "Erro ao validar os dados da parcela."
+                            "errors": Installment_serializer.errors,
+                            "message": "Erro ao validar os dados da Installment."
                         }, status=status.HTTP_400_BAD_REQUEST)
 
+            if recurrence == 'SINGLE':
+                # Obtenha informações relevantes do Finance
+                value = float(new_finance['value'])  # Valor total do Finance
+                
+                # Pegar a data separando dia, mês e ano
+                date = new_finance.get('date')  # Data inicial como string
+
+                Installment_data = {
+                    'finance': finance.id,
+                    'installment_value': value,
+                    'current_installment': 1,
+                    'date': date, 
+                    'is_paid': False,
+                    'created_by': user.id,
+                    'updated_by': user.id
+                }
+
+                # Serializar e validar cada Installment
+                Installment_serializer = InstallmentSerializer(data=Installment_data)
+                
+                if Installment_serializer.is_valid():
+                    Installment_serializer.save()
+                else:
+                    # Caso algum dado da Installment seja inválido, retorne os erros
+                    return Response({
+                        "errors": Installment_serializer.errors,
+                        "message": "Erro ao validar os dados da Installment."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                     
+            if recurrence == 'MONTHLY':
+                # Obtenha informações relevantes do Finance
+                value = float(new_finance['value'])  # Valor total do Finance
+                
+                # Pegar a data separando dia, mês e ano
+                due_date_str = new_finance.get('date', str(datetime.datetime.now().date()))  # Data inicial como string
+                due_date = datetime.datetime.strptime(due_date_str, '%Y-%m-%d')  # Convertendo para objeto datetime
+                day = due_date.day
+                month = due_date.month
+                year = due_date.year
+
+                 # Crie as Installments automaticamente
+                for i in range(13- month):
+                    # Ajuste o mês e ano para a Installment
+                    new_month = (month + i) % 12 or 12  # Garantir que o mês fique entre 1 e 12
+                    new_year = year + (month + i - 1) // 12  # Ajustar o ano conforme os meses aumentam
+
+                    # Garantir que o dia seja válido para o mês (caso, por exemplo, fevereiro tenha menos dias)
+                    last_day_of_new_month = calendar.monthrange(new_year, new_month)[1]
+                    new_day = min(day, last_day_of_new_month)  # Ajusta o dia se for maior que o último dia do mês
+
+                    # Montar a nova data para a Installment
+                    new_due_date = datetime.datetime(new_year, new_month, new_day).date()
+
+                    Installment_data = {
+                        'finance': finance.id,
+                        'installment_value': value,
+                        'current_installment': 1,
+                        'date': new_due_date,  # Definindo a data da Installment
+                        'is_paid': False,
+                        'created_by': user.id,
+                        'updated_by': user.id
+                         # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
+                    }
+
+                    # Serializar e validar cada Installment
+                    Installment_serializer = InstallmentSerializer(data=Installment_data)
+                    
+                    if Installment_serializer.is_valid():
+                        Installment_serializer.save()
+                    else:
+                        # Caso algum dado da Installment seja inválido, retorne os erros
+                        return Response({
+                            "errors": Installment_serializer.errors,
+                            "message": "Erro ao validar os dados da Installment."
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                        
             # Retorne o finance criado com status 201 CREATED
             return Response(finance_serializer.data, status=status.HTTP_201_CREATED)
 
@@ -568,20 +645,20 @@ def delete_finance(request, id):
 
 
 #?  -----------------------
-#?  -------- PARCELA ---------
+#?  -------- Installment ---------
 #?  -----------------------
 @api_view(['GET'])
-def get_parcela(request):
+def get_Installment(request):
     if(request.method == 'GET'):
-        parcelas = Parcela.objects.all()
-        serializer = ParcelaSerializer(parcelas, many=True)
+        Installments = Installment.objects.all()
+        serializer = InstallmentSerializer(Installments, many=True)
         return Response(serializer.data)
     
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['PATCH'])
-def pay_instalment(request):
+def get_installment(request):
     if(request.method == 'PATCH'):
         if not 'id'in request.data:
             return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -604,18 +681,18 @@ def pay_instalment(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def post_parcela(request):
+def post_installment(request):
     if(request.method == 'POST'):
         
         user = request.user
-        new_parcela = request.data.copy()  # Crie uma cópia dos dados do request
+        new_instalment = request.data.copy()  # Crie uma cópia dos dados do request
         
         # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
-        new_parcela['created_by'] = user.id
-        new_parcela['updated_by'] = user.id
+        new_instalment['created_by'] = user.id
+        new_instalment['updated_by'] = user.id
         
         # Serializar os dados recebidos
-        serializer = ParcelaSerializer(data=new_parcela)
+        serializer = InstallmentSerializer(data=new_instalment)
 
         # Verifique se os dados são válidos
         if serializer.is_valid():
@@ -628,38 +705,36 @@ def post_parcela(request):
             "message": "Erro ao validar os dados de entrada."
         }, status=status.HTTP_400_BAD_REQUEST)
         
-# @api_view(['GET'])
-# def get_conta(request):
-#     if(request.method == 'GET'):
-#         contas = Conta.objects.all()
-#         serializer = ContaSerializer(contas, many=True)
-#         return Response(serializer.data)
-    
-#     return Response(status=status.HTTP_400_BAD_REQUEST)
+        
 
-# @api_view(['GET'])
-# def get_finance(request):
-#     if(request.method == 'GET'):
-#         finances = Finance.objects.all()
-#         serializer = FinanceSerializer(finances, many=True)
-#         return Response(serializer.data)
-    
-#     return Response(status=status.HTTP_400_BAD_REQUEST)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_dashboard(request):
+    if request.method == 'GET':
+        start_date  = request.GET.get('start_date')
+        end_date    = request.GET.get('end_date')
+        
+        # Data de hoje
+        today = timezone.now().date()
 
-# @api_view(['GET'])
-# def get_parcela(request):
-#     if(request.method == 'GET'):
-#         parcelas = Parcela.objects.all()
-#         serializer = ParcelaSerializer(parcelas, many=True)
-#         return Response(serializer.data)
-    
-#     return Response(status=status.HTTP_400_BAD_REQUEST)
+        # Filtrar parcelas dentro do intervalo de datas
+        installments = Installment.objects.filter(
+            date__gte   = start_date,
+            date__lt    = end_date
+        ).values_list('finance', flat=True).distinct()
 
-# @api_view(['GET'])
-# def get_finance_entry(request):
-#     if(request.method == 'GET'):
-#         finance_entrys = FinanceEntry.objects.all()
-#         serializer = FinanceEntrySerializer(finance_entrys, many=True)
-#         return Response(serializer.data)
-    
-#     return Response(status=status.HTTP_400_BAD_REQUEST)
+        # Totais de entrada e saída do dia
+        total_day_income = Installment.objects.filter(date=today, finance__type='INCOME').aggregate(total=Sum('installment_value'))['total'] or 0
+        total_day_expenditure = Installment.objects.filter(date=today, finance__type='EXPENDITURE').aggregate(total=Sum('installment_value'))['total'] or 0
+
+        # Totais de entrada e saída do mês
+        total_month_income = Installment.objects.filter(date__gte = start_date, date__lt = end_date, finance__type='INCOME').aggregate(total=Sum('installment_value'))['total'] or 0
+        total_month_expenditure = Installment.objects.filter(date__gte = start_date, date__lt = end_date, finance__type='EXPENDITURE').aggregate(total=Sum('installment_value'))['total'] or 0
+
+        # Retornar os totais como JSON
+        return JsonResponse({
+            'total_day_income': total_day_income,
+            'total_day_expenditure': total_day_expenditure,
+            'total_month_income': total_month_income,
+            'total_month_expenditure': total_month_expenditure,
+        })

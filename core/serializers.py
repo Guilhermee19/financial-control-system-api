@@ -8,9 +8,9 @@ class UserSerializer(serializers.ModelSerializer):
     exclude = ['user_token', 'password', 'forgot_password_expire', 'forgot_password_hash']  # Exclui o campo 'password'
     # fields = ['id', 'last_login', 'username', 'email', 'is_active']
     
-class TagSerializer(serializers.ModelSerializer):
+class CategorySerializer(serializers.ModelSerializer):
   class Meta:
-    model = Tag
+    model = Category
     fields = '__all__'
     
 class ContaSerializer(serializers.ModelSerializer):
@@ -23,28 +23,23 @@ class FinanceContaSerializer(serializers.ModelSerializer):
     model = Conta
     exclude = ['created_at', 'created_by', 'updated_at', 'updated_by']  # Exclui o campo 'password'
 
-class FinanceTagSerializer(serializers.ModelSerializer):
+class FinanceCategorySerializer(serializers.ModelSerializer):
   class Meta:
-    model = Tag
-    fields = ['id', 'bg_color', 'color', 'name', 'percent', 'type']  # Exclui o campo 'password'
+    model = Category
+    fields = ['id', 'bg_color', 'color', 'name', 'percent'] 
     
 class FinanceSerializer(serializers.ModelSerializer):
   account_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
-  tag_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
-  # parcelas = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
-  
-  # def get_parcelas(self, obj):
-  #   parcela = Parcela.objects.filter(finance_id = obj.id)
-  #   return ParcelaSerializer(parcela, many = True).data
+  category_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
   
   def get_account_obj(self, obj):
     if obj.account:
         return FinanceContaSerializer(obj.account).data
     return None
   
-  def get_tag_obj(self, obj):
-    if obj.tag:
-        return FinanceTagSerializer(obj.tag).data
+  def get_category_obj(self, obj):
+    if obj.category:
+        return FinanceCategorySerializer(obj.category).data
     return None
   
   class Meta:
@@ -52,12 +47,7 @@ class FinanceSerializer(serializers.ModelSerializer):
     fields = '__all__'
     
     
-class ParcelaSerializer(serializers.ModelSerializer):
+class InstallmentSerializer(serializers.ModelSerializer):
   class Meta:
-    model = Parcela
-    fields = '__all__'
-    
-class FinanceEntrySerializer(serializers.ModelSerializer):
-  class Meta:
-    model = FinanceEntry
+    model = Installment
     fields = '__all__'

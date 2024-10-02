@@ -80,18 +80,11 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
 
-class Tag(BaseModel):
-    TYPE_CHOICES = [
-        ('ENTRY', 'ENTRY'),
-        ('OUTPUT', 'OUTPUT')
-    ]
-      
+class Category(BaseModel):
     color = models.CharField(max_length=20)
     bg_color = models.CharField(max_length=20, default='#f0f2f8')
     name = models.CharField(max_length=100)
     percent = models.DecimalField(max_digits=5, decimal_places=2)
-    type = models.CharField(max_length=10, default='OUTPUT', choices=TYPE_CHOICES)
-    
 
     def __str__(self):
         return self.name
@@ -110,14 +103,28 @@ class Conta(BaseModel):
         return self.name
 
 class Finance(BaseModel):
-    tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
+    TYPE_CHOICES = [
+        ('INCOME', 'Receita'),
+        ('EXPENDITURE', 'Despesa'),
+        ('TRANSFER', 'Transferência')
+    ]
+      
+    REPEAT_CHOICES = [
+        ('SINGLE', 'Único'),
+        ('WEEKLY', 'Semanal'),
+        ('MONTHLY', 'Mensal'),
+        ('ANNUAL', 'Anual'),
+        ('INSTALLMENTS', 'Parcelada'),
+    ]
+
+    category = models.ForeignKey(Category, null=True, on_delete=models.SET_NULL)
     date = models.DateField(null=True, blank=True)
     value = models.FloatField()
     account = models.ForeignKey(Conta, null=True, on_delete=models.CASCADE)
-    is_cash = models.BooleanField()
-    is_installments = models.BooleanField()
     number_of_installments = models.IntegerField()
     description = models.CharField(max_length=255)
+    type = models.CharField(max_length=30, default='INCOME', choices=TYPE_CHOICES)
+    recurrence = models.CharField(max_length=30, default='DAILY', choices=REPEAT_CHOICES)
 
     def __str__(self):
         if(self.account):
@@ -125,7 +132,7 @@ class Finance(BaseModel):
         else:
             return f"{self.id} - {self.description}"
 
-class Parcela(BaseModel):
+class Installment(BaseModel):
     finance = models.ForeignKey(Finance, related_name='installments', on_delete=models.CASCADE)
     installment_value = models.FloatField()
     current_installment = models.IntegerField()
@@ -135,19 +142,3 @@ class Parcela(BaseModel):
     def __str__(self):
         return f"{self.finance} - Installment {self.current_installment}"
 
-class FinanceEntry(BaseModel):
-    REPEAT_CHOICES = [
-        ('daily', 'Daily'),
-        ('weekly', 'Weekly'),
-        ('monthly', 'Monthly'),
-        ('annual', 'Annual'),
-    ]
-
-    date = models.DateField(null=True, blank=True)
-    value = models.DecimalField(max_digits=10, decimal_places=2)
-    type = models.CharField(max_length=10, choices=[('card', 'Card'), ('conta', 'Conta')])
-    description = models.CharField(max_length=255)
-    repeat = models.CharField(max_length=10, choices=REPEAT_CHOICES)
-
-    def __str__(self):
-        return f"{self.description} - {self.value}"
