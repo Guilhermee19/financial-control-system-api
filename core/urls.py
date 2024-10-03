@@ -35,7 +35,7 @@ urlpatterns = [
     
     #? CRUD Installment
     path('all-installment/', get_installment),
-    # path('pay-installment/', post_installment),
+    path('pay-installment/', pay_installment),
     # path('finance_entry/', get_finance_entry),
     
     #? Dashboard

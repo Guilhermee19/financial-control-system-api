@@ -1,5 +1,6 @@
 from django.http import JsonResponse
 from django.db.models import Sum
+from django.db.models import Prefetch
 from rest_framework.decorators import api_view
 from rest_framework import status
 from rest_framework.response import Response
@@ -8,10 +9,13 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.response import Response
+from rest_framework import status
 from .models import User, Category, Conta, Finance, Installment
 from .serializers import *
 import datetime  # Importar o módulo completo para evitar conflito
 import calendar
+
 
 import json
 import httplib2
@@ -398,42 +402,56 @@ def delete_conta(request, id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_all_finances(request):
-    if(request.method == 'GET'):
-        
-        start_date  = request.GET.get('start_date')
-        end_date    = request.GET.get('end_date')
+    if request.method == 'GET':
+        return_all = request.GET.get('return_all')
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
 
-        # Filtrar parcelas dentro do intervalo de datas
+        # Passo 1: Filtrar os Installments dentro do intervalo de datas
         installments = Installment.objects.filter(
-            date__gte   = start_date,
-            date__lt    = end_date
-        ).values_list('finance', flat=True).distinct()
-        
-        # Ordenar por data
-        installments_order = installments.order_by('date')
+            date__gte=start_date,
+            date__lt=end_date
+        ).order_by('date')  # Ordenar por data de parcela
 
-        # Filtrar finances que possuem as parcelas filtradas
+        # Passo 2: Obter os IDs dos finances que possuem os installments filtrados
+        finance_ids = installments.values_list('finance_id', flat=True).distinct()
+
+        # Passo 3: Filtrar os finances que possuem as parcelas filtradas
         finances = Finance.objects.filter(
-            id__in      = installments_order,
-            created_by  = request.user
-        )
-        
-        # PAGINATION
+            id__in=finance_ids,
+            created_by=request.user
+        ).order_by('date')
+
+        # Passo 4: Adicionar o installment ao finance correspondente
+        finance_with_installments = []
+        for finance in finances:
+            # Obter o primeiro installment que se encaixa no intervalo de datas
+            installment = installments.filter(finance=finance).first()
+
+            # Serializar o finance
+            finance_data = FinanceSerializer(finance).data
+
+            # Se houver installment, adicionar ao resultado
+            if installment:
+                installment_data = InstallmentSerializer(installment).data
+                finance_data['installment'] = installment_data
+
+            finance_with_installments.append(finance_data)
+
+        # Passo 5: Se return_all for True, retornar todos os resultados sem paginação
+        if return_all and return_all.lower() == 'true':
+            return Response(finance_with_installments, status=status.HTTP_200_OK)
+
+        # Passo 6: Caso contrário, aplicar a paginação
         paginator = PageNumberPagination()
         paginator.page_size = request.query_params.get('page_size', 10)
         paginator.page_query_param = 'page'
 
-        serializer = FinanceSerializer(paginator.paginate_queryset(finances, request), many=True).data
-        for item in serializer:
-            installment = Installment.objects.filter(   
-                finance_id = item['id'],
-                date__gte   = start_date,
-                date__lt    = end_date
-            ).first()
-            
-            item['installment'] =  InstallmentSerializer(installment).data
-        return paginator.get_paginated_response(serializer)
-    
+        # Paginar os resultados
+        paginated_finances = paginator.paginate_queryset(finance_with_installments, request)
+
+        return paginator.get_paginated_response(paginated_finances)
+
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -705,7 +723,32 @@ def post_installment(request):
             "message": "Erro ao validar os dados de entrada."
         }, status=status.HTTP_400_BAD_REQUEST)
         
+
+@api_view(['PATCH'])
+def pay_installment(request):
+    if request.method == 'PATCH':
+        installment_id = request.data.get('installment_id')
         
+        if not installment_id:
+            return Response({"error": "Installment ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Localizar a parcela pelo ID
+            installment = Installment.objects.get(id=int(installment_id))
+            
+            # Atualizar o campo is_paid
+            installment.is_paid = True
+            installment.save()
+
+            return Response({"message": "Installment marked as paid successfully."}, status=status.HTTP_200_OK)
+
+        except Installment.DoesNotExist:
+            return Response({"error": "Installment not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+
+   
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
