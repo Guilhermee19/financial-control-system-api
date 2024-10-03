@@ -766,13 +766,15 @@ def get_dashboard(request):
             date__lt    = end_date
         ).values_list('finance', flat=True).distinct()
 
+            
+
         # Totais de entrada e saída do dia
-        total_day_income = Installment.objects.filter(date=today, finance__type='INCOME').aggregate(total=Sum('installment_value'))['total'] or 0
-        total_day_expenditure = Installment.objects.filter(date=today, finance__type='EXPENDITURE').aggregate(total=Sum('installment_value'))['total'] or 0
+        total_day_income = Installment.objects.filter(date=today, finance__type='INCOME', created_by = request.user).aggregate(total=Sum('installment_value'))['total'] or 0
+        total_day_expenditure = Installment.objects.filter(date=today, finance__type='EXPENDITURE', created_by = request.user).aggregate(total=Sum('installment_value'))['total'] or 0
 
         # Totais de entrada e saída do mês
-        total_month_income = Installment.objects.filter(date__gte = start_date, date__lt = end_date, finance__type='INCOME').aggregate(total=Sum('installment_value'))['total'] or 0
-        total_month_expenditure = Installment.objects.filter(date__gte = start_date, date__lt = end_date, finance__type='EXPENDITURE').aggregate(total=Sum('installment_value'))['total'] or 0
+        total_month_income = Installment.objects.filter(date__gte = start_date, date__lt = end_date, finance__type='INCOME', created_by = request.user).aggregate(total=Sum('installment_value'))['total'] or 0
+        total_month_expenditure = Installment.objects.filter(date__gte = start_date, date__lt = end_date, finance__type='EXPENDITURE', created_by = request.user).aggregate(total=Sum('installment_value'))['total'] or 0
 
         # Retornar os totais como JSON
         return JsonResponse({
