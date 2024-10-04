@@ -20,7 +20,6 @@ import calendar
 import json
 import httplib2
 import certifi
-import datetime
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -403,51 +402,61 @@ def delete_conta(request, id):
 @permission_classes([IsAuthenticated])
 def get_all_finances(request):
     if request.method == 'GET':
-        return_all = request.GET.get('return_all')
+        return_all = request.GET.get('return_all', 'false').lower() == 'true'
         start_date = request.GET.get('start_date')
         end_date = request.GET.get('end_date')
 
-        # Passo 1: Filtrar os Installments dentro do intervalo de datas
+        # Ensure start_date and end_date are provided and valid
+        if not start_date or not end_date:
+            return Response({"error": "start_date and end_date are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            start_date = datetime.datetime.strptime(start_date, '%Y-%m-%d')
+            end_date = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            return Response({"error": "Invalid date format, use YYYY-MM-DD"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Step 1: Filter Installments within the date range
         installments = Installment.objects.filter(
             date__gte=start_date,
             date__lt=end_date
-        ).order_by('date')  # Ordenar por data de parcela
+        ).order_by('date')
 
-        # Passo 2: Obter os IDs dos finances que possuem os installments filtrados
+        # Step 2: Get finance IDs that have matching installments
         finance_ids = installments.values_list('finance_id', flat=True).distinct()
 
-        # Passo 3: Filtrar os finances que possuem as parcelas filtradas
+        # Step 3: Filter Finances that match the filtered installments and user
         finances = Finance.objects.filter(
             id__in=finance_ids,
             created_by=request.user
         ).order_by('date')
 
-        # Passo 4: Adicionar o installment ao finance correspondente
+        # Step 4: Attach installments to each finance and duplicate finance if necessary
         finance_with_installments = []
         for finance in finances:
-            # Obter o primeiro installment que se encaixa no intervalo de datas
-            installment = installments.filter(finance=finance).first()
+            # Get all installments for this finance within the date range
+            finance_installments = installments.filter(finance=finance)
 
-            # Serializar o finance
-            finance_data = FinanceSerializer(finance).data
+            # Loop through each installment and create a separate finance entry for each one
+            for installment in finance_installments:
+                # Serialize the finance
+                finance_data = FinanceSerializer(finance).data
 
-            # Se houver installment, adicionar ao resultado
-            if installment:
+                # Add the single installment to the finance data
                 installment_data = InstallmentSerializer(installment).data
                 finance_data['installment'] = installment_data
 
-            finance_with_installments.append(finance_data)
+                # Append the finance with this specific installment
+                finance_with_installments.append(finance_data)
 
-        # Passo 5: Se return_all for True, retornar todos os resultados sem paginação
-        if return_all and return_all.lower() == 'true':
+        # Step 5: If return_all is True, return all results without pagination
+        if return_all:
             return Response(finance_with_installments, status=status.HTTP_200_OK)
 
-        # Passo 6: Caso contrário, aplicar a paginação
+        # Step 6: Apply pagination
         paginator = PageNumberPagination()
         paginator.page_size = request.query_params.get('page_size', 10)
-        paginator.page_query_param = 'page'
 
-        # Paginar os resultados
         paginated_finances = paginator.paginate_queryset(finance_with_installments, request)
 
         return paginator.get_paginated_response(paginated_finances)
@@ -474,161 +483,107 @@ def get_finance_by_id(request):
 @permission_classes([IsAuthenticated])
 def post_finance(request):
     if request.method == 'POST':
-        
-        # Obtenha o usuário autenticado
         user = request.user
-        
-        # Crie uma cópia dos dados recebidos no request para o Finance
         new_finance = request.data.copy()
-        
-        # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by' do Finance
         new_finance['created_by'] = user.id
         new_finance['updated_by'] = user.id
         
-        # Serializar os dados recebidos para Finance
         finance_serializer = FinanceSerializer(data=new_finance)
 
+
+        # Verifique se os dados do Finance são válidos
+        
         # Verifique se os dados do Finance são válidos
         if finance_serializer.is_valid():
-            # Salve o novo objeto Finance no banco de dados
             finance = finance_serializer.save()
-
-            # Verifique se a variável 'number_of_installments' foi enviada e é maior que 1
-            number_of_installments = int(request.data.get('number_of_installments', 1))
             recurrence = request.data.get('recurrence')
-
+            value = float(new_finance['value'])
+            number_of_installments = int(request.data.get('number_of_installments', 1))
+            due_date_str = new_finance.get('date', str(datetime.datetime.now().date()))
+            due_date = datetime.datetime.strptime(due_date_str, '%Y-%m-%d').date()
+            
+            # Cria parcelas baseadas no tipo de recorrência
             if recurrence == 'INSTALLMENTS' and number_of_installments > 0:
-                # Obtenha informações relevantes do Finance
-                total_amount = float(new_finance['value'])  # Valor total do Finance
-                installment_value = total_amount / number_of_installments  # Valor de cada Installment
+                create_installments(finance, value / number_of_installments, number_of_installments, due_date, user)
+
+            elif recurrence == 'SINGLE':
+                create_installment(finance, value, 1, due_date, user)
+            
+            elif recurrence == 'WEEKLY':
+                create_weekly_installments(finance, value, due_date, user)
                 
-                # Pegar a data separando dia, mês e ano
-                due_date_str = new_finance.get('date', str(datetime.datetime.now().date()))  # Data inicial como string
-                due_date = datetime.datetime.strptime(due_date_str, '%Y-%m-%d')  # Convertendo para objeto datetime
-                day = due_date.day
-                month = due_date.month
-                year = due_date.year
-
-                # Crie as Installments automaticamente
-                for i in range(number_of_installments):
-                    # Ajuste o mês e ano para a Installment
-                    new_month = (month + i) % 12 or 12  # Garantir que o mês fique entre 1 e 12
-                    new_year = year + (month + i - 1) // 12  # Ajustar o ano conforme os meses aumentam
-
-                    # Garantir que o dia seja válido para o mês (caso, por exemplo, fevereiro tenha menos dias)
-                    last_day_of_new_month = calendar.monthrange(new_year, new_month)[1]
-                    new_day = min(day, last_day_of_new_month)  # Ajusta o dia se for maior que o último dia do mês
-
-                    # Montar a nova data para a Installment
-                    new_due_date = datetime.datetime(new_year, new_month, new_day).date()
-
-                    Installment_data = {
-                        'finance': finance.id,
-                        'installment_value': installment_value,
-                        'current_installment': i + 1,
-                        'date': new_due_date,  # Definindo a data da Installment
-                        'is_paid': False,
-                        'created_by': user.id,
-                        'updated_by': user.id
-                         # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
-                    }
-
-                    # Serializar e validar cada Installment
-                    Installment_serializer = InstallmentSerializer(data=Installment_data)
-                    
-                    if Installment_serializer.is_valid():
-                        Installment_serializer.save()
-                    else:
-                        # Caso algum dado da Installment seja inválido, retorne os erros
-                        return Response({
-                            "errors": Installment_serializer.errors,
-                            "message": "Erro ao validar os dados da Installment."
-                        }, status=status.HTTP_400_BAD_REQUEST)
-
-            if recurrence == 'SINGLE':
-                # Obtenha informações relevantes do Finance
-                value = float(new_finance['value'])  # Valor total do Finance
+            elif recurrence == 'MONTHLY':
+                create_monthly_installments(finance, value, due_date, user)
                 
-                # Pegar a data separando dia, mês e ano
-                date = new_finance.get('date')  # Data inicial como string
+            elif recurrence == 'ANNUAL':
+                create_annual_installments(finance, value, due_date, user)
 
-                Installment_data = {
-                    'finance': finance.id,
-                    'installment_value': value,
-                    'current_installment': 1,
-                    'date': date, 
-                    'is_paid': False,
-                    'created_by': user.id,
-                    'updated_by': user.id
-                }
-
-                # Serializar e validar cada Installment
-                Installment_serializer = InstallmentSerializer(data=Installment_data)
-                
-                if Installment_serializer.is_valid():
-                    Installment_serializer.save()
-                else:
-                    # Caso algum dado da Installment seja inválido, retorne os erros
-                    return Response({
-                        "errors": Installment_serializer.errors,
-                        "message": "Erro ao validar os dados da Installment."
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                     
-            if recurrence == 'MONTHLY':
-                # Obtenha informações relevantes do Finance
-                value = float(new_finance['value'])  # Valor total do Finance
-                
-                # Pegar a data separando dia, mês e ano
-                due_date_str = new_finance.get('date', str(datetime.datetime.now().date()))  # Data inicial como string
-                due_date = datetime.datetime.strptime(due_date_str, '%Y-%m-%d')  # Convertendo para objeto datetime
-                day = due_date.day
-                month = due_date.month
-                year = due_date.year
-
-                 # Crie as Installments automaticamente
-                for i in range(13- month):
-                    # Ajuste o mês e ano para a Installment
-                    new_month = (month + i) % 12 or 12  # Garantir que o mês fique entre 1 e 12
-                    new_year = year + (month + i - 1) // 12  # Ajustar o ano conforme os meses aumentam
-
-                    # Garantir que o dia seja válido para o mês (caso, por exemplo, fevereiro tenha menos dias)
-                    last_day_of_new_month = calendar.monthrange(new_year, new_month)[1]
-                    new_day = min(day, last_day_of_new_month)  # Ajusta o dia se for maior que o último dia do mês
-
-                    # Montar a nova data para a Installment
-                    new_due_date = datetime.datetime(new_year, new_month, new_day).date()
-
-                    Installment_data = {
-                        'finance': finance.id,
-                        'installment_value': value,
-                        'current_installment': 1,
-                        'date': new_due_date,  # Definindo a data da Installment
-                        'is_paid': False,
-                        'created_by': user.id,
-                        'updated_by': user.id
-                         # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
-                    }
-
-                    # Serializar e validar cada Installment
-                    Installment_serializer = InstallmentSerializer(data=Installment_data)
-                    
-                    if Installment_serializer.is_valid():
-                        Installment_serializer.save()
-                    else:
-                        # Caso algum dado da Installment seja inválido, retorne os erros
-                        return Response({
-                            "errors": Installment_serializer.errors,
-                            "message": "Erro ao validar os dados da Installment."
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                        
-            # Retorne o finance criado com status 201 CREATED
             return Response(finance_serializer.data, status=status.HTTP_201_CREATED)
+        
+        return Response({"errors": finance_serializer.errors, "message": "Erro ao validar os dados do finance."}, status=status.HTTP_400_BAD_REQUEST)
+    
+# Função para criar uma única parcela
+def create_installment(finance, value, current_installment, due_date, user):
+    installment_data = {
+        'finance': finance.id,
+        'installment_value': value,
+        'current_installment': current_installment,
+        'date': due_date,
+        'is_paid': False,
+        'created_by': user.id,
+        'updated_by': user.id
+    }
+    validate_and_save_installment(installment_data)
 
-        # Se os dados do Finance não forem válidos, retorne os detalhes dos erros
-        return Response({
-            "errors": finance_serializer.errors,
-            "message": "Erro ao validar os dados do finance."
-        }, status=status.HTTP_400_BAD_REQUEST)
+# Função para validar e salvar cada parcela
+def validate_and_save_installment(installment_data):
+    serializer = InstallmentSerializer(data=installment_data)
+    if serializer.is_valid():
+        serializer.save()
+    else:
+        raise ValueError(serializer.errors)
+
+# Função para criar múltiplas parcelas
+def create_installments(finance, installment_value, number_of_installments, due_date, user):
+    
+    for i in range(number_of_installments):
+        new_due_date = adjust_date_by_month(due_date, i)
+        create_installment(finance, installment_value, i + 1, new_due_date, user)
+
+# Função para criar parcelas semanais até o final do ano
+def create_weekly_installments(finance, value, due_date, user):
+    installment_number = 1
+    while due_date <= datetime.datetime.date(due_date.year, 12, 31):
+        create_installment(finance, value, installment_number, due_date, user)
+        due_date += datetime.datetime.timedelta(days=7)
+        installment_number += 1
+
+# Função para criar parcelas mensais
+def create_monthly_installments(finance, value, due_date, user):
+    for i in range(13 - due_date.month):
+        new_due_date = adjust_date_by_month(due_date, i)
+        create_installment(finance, value, i + 1, new_due_date, user)
+
+# Função para criar parcelas anuais
+def create_annual_installments(finance, value, due_date, user):
+    for i in range(5):
+        new_due_date = adjust_date_by_year(due_date, i)
+        create_installment(finance, value, i + 1, new_due_date, user)
+
+# Ajusta a data adicionando meses e lidando com meses curtos
+def adjust_date_by_month(date, month_increment):
+    new_month = (date.month + month_increment - 1) % 12 + 1
+    new_year = date.year + (date.month + month_increment - 1) // 12
+    last_day_of_month = calendar.monthrange(new_year, new_month)[1]
+    return datetime.date(new_year, new_month, min(date.day, last_day_of_month))
+
+# Ajusta a data adicionando anos
+def adjust_date_by_year(date, year_increment):
+    new_year = date.year + year_increment
+    last_day_of_month = calendar.monthrange(new_year, date.month)[1]
+    return datetime.date(new_year, date.month, min(date.day, last_day_of_month))
+    
+
 
 @api_view(['PATCH'])
 def update_finance(request):
@@ -754,27 +709,30 @@ def pay_installment(request):
 @permission_classes([IsAuthenticated])
 def get_dashboard(request):
     if request.method == 'GET':
+        # Pegar as datas de início e fim passadas via request
         start_date  = request.GET.get('start_date')
         end_date    = request.GET.get('end_date')
-        
-        # Data de hoje
+
+        # Converter strings de data para objetos datetime.date
+        if start_date and end_date:
+            start_date = datetime.datetime.strptime(start_date, '%Y-%m-%d').date()
+            end_date = datetime.datetime.strptime(end_date, '%Y-%m-%d').date()
+        else:
+            # Se não forem passadas, usar o mês atual como padrão
+            today = timezone.now().date()
+            start_date = today.replace(day=1)  # Primeiro dia do mês
+            end_date = (today.replace(month=today.month % 12 + 1, day=1) - timezone.timedelta(days=1))  # Último dia do mês
+
+        # Data de hoje sem informações de fuso horário
         today = timezone.now().date()
 
-        # Filtrar parcelas dentro do intervalo de datas
-        installments = Installment.objects.filter(
-            date__gte   = start_date,
-            date__lt    = end_date
-        ).values_list('finance', flat=True).distinct()
+        # Totais de entrada e saída do dia (somente o dia atual)
+        total_day_income = Installment.objects.filter(date=today, finance__type='INCOME', created_by=request.user).aggregate(total=Sum('installment_value'))['total'] or 0
+        total_day_expenditure = Installment.objects.filter(date=today, finance__type='EXPENDITURE', created_by=request.user).aggregate(total=Sum('installment_value'))['total'] or 0
 
-            
-
-        # Totais de entrada e saída do dia
-        total_day_income = Installment.objects.filter(date=today, finance__type='INCOME', created_by = request.user).aggregate(total=Sum('installment_value'))['total'] or 0
-        total_day_expenditure = Installment.objects.filter(date=today, finance__type='EXPENDITURE', created_by = request.user).aggregate(total=Sum('installment_value'))['total'] or 0
-
-        # Totais de entrada e saída do mês
-        total_month_income = Installment.objects.filter(date__gte = start_date, date__lt = end_date, finance__type='INCOME', created_by = request.user).aggregate(total=Sum('installment_value'))['total'] or 0
-        total_month_expenditure = Installment.objects.filter(date__gte = start_date, date__lt = end_date, finance__type='EXPENDITURE', created_by = request.user).aggregate(total=Sum('installment_value'))['total'] or 0
+        # Totais de entrada e saída do mês (usar data >= início e <= fim)
+        total_month_income = Installment.objects.filter(date__gte=start_date, date__lte=end_date, finance__type='INCOME', created_by=request.user).aggregate(total=Sum('installment_value'))['total'] or 0
+        total_month_expenditure = Installment.objects.filter(date__gte=start_date, date__lte=end_date, finance__type='EXPENDITURE', created_by=request.user).aggregate(total=Sum('installment_value'))['total'] or 0
 
         # Retornar os totais como JSON
         return JsonResponse({
