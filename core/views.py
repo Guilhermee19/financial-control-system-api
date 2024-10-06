@@ -199,6 +199,29 @@ def post_user(request):
             "message": "Erro ao validar os dados do finance."
         }, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_user(request):
+    user = request.user  # Pega o usuário autenticado a partir do token
+    
+    # Atualize o usuário com os dados recebidos
+    serializer = UserSerializer(user, data=request.data, partial=True)  # `partial=True` permite atualizar apenas campos específicos
+
+    if serializer.is_valid():
+        item = serializer.save()
+
+        # Se a senha for fornecida, a senha precisa ser tratada separadamente
+        if "password" in request.data:
+            item.set_password(request.data["password"])
+            item.save()
+
+        return Response(UserSerializer(item).data, status=status.HTTP_200_OK)
+    
+    return Response({
+        "errors": serializer.errors,
+        "message": "Erro ao validar os dados do usuário."
+    }, status=status.HTTP_400_BAD_REQUEST)
+
 
 #?  -----------------------
 #?  -------- CATERIES ---------
