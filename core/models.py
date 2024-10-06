@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.utils import timezone
+from drf_base64.fields import Base64ImageField, Base64FileField
 
 def update_last_login(sender, user, **kwargs):
     """
@@ -39,7 +40,7 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser): 
-    profile_image = models.ImageField(upload_to='profile_images', null=True, blank=True)
+    profile_image = Base64ImageField(required=False)
     email = models.EmailField(max_length=255, null=False, blank=False, unique=True)
     name = models.CharField(max_length=255, null=True, blank=True)
     is_admin = models.BooleanField(default=False)
@@ -138,7 +139,8 @@ class Installment(BaseModel):
     current_installment = models.IntegerField()
     date = models.DateField(null=True, blank=True)
     is_paid = models.BooleanField(default=False)
-
+    installment_image = models.ImageField(upload_to='installments/', null=True, blank=True)
+    
     def __str__(self):
         return f"{self.finance} - Installment {self.current_installment}"
 

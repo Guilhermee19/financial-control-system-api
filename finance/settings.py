@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
 from pathlib import Path
+import os
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -31,7 +33,7 @@ ALLOWED_HOSTS = [
     '127.0.0.1', 
     '5.252.54.146', 
     'finance-api.iamgui.dev',
-    'fcs.iamgui.dev', 
+    'checkmoney.iamgui.dev', 
     'localhost:4200'
 ]
 
@@ -56,6 +58,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core',
+    'storages',
 ]
 
 REST_FRAMEWORK = {
@@ -157,3 +160,17 @@ CORS_ALLOW_ALL_ORIGINS = True  # Permite todas as origens. Para produção, conf
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# AWS 
+AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME')
+AWS_DEFAULT_ACL = 'public-read'
+AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
+AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY')
+
+# Definir o S3 como local de armazenamento padrão para arquivos de mídia
+DEFAULT_FILE_STORAGE = 'finance.storage.MediaStorage'
+
+AWS_LOCATION = 'static'
+# STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
