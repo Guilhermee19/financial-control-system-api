@@ -1,3 +1,5 @@
+import base64
+from django.core.files.base import ContentFile
 from django.http import JsonResponse
 from django.db.models import Sum
 from django.db.models import Prefetch
@@ -702,11 +704,11 @@ def post_installment(request):
         }, status=status.HTTP_400_BAD_REQUEST)
         
 
-@api_view(['PATCH'])
 def pay_installment(request):
     if request.method == 'PATCH':
         installment_id = request.data.get('installment_id')
-        
+        installment_image_base64 = request.data.get('installment_image', None)
+
         if not installment_id:
             return Response({"error": "Installment ID is required."}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -716,9 +718,18 @@ def pay_installment(request):
             
             # Atualizar o campo is_paid
             installment.is_paid = True
+
+            # Verificar se uma imagem foi enviada
+            if installment_image_base64:
+                # Decodificar a imagem base64 e salvar no campo 'receipt_image'
+                format, imgstr = installment_image_base64.split(';base64,')
+                ext = format.split('/')[-1]
+                receipt_image = ContentFile(base64.b64decode(imgstr), name=f'receipt_{installment_id}.{ext}')
+                installment.receipt_image = receipt_image
+            
             installment.save()
 
-            return Response({"message": "Installment marked as paid successfully."}, status=status.HTTP_200_OK)
+            return Response({"message": "Installment marked as paid and image saved successfully."}, status=status.HTTP_200_OK)
 
         except Installment.DoesNotExist:
             return Response({"error": "Installment not found."}, status=status.HTTP_404_NOT_FOUND)

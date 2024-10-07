@@ -1,8 +1,9 @@
 from rest_framework import serializers
-
+from drf_base64.fields import Base64ImageField, Base64FileField
 from .models import *
 
 class UserSerializer(serializers.ModelSerializer):
+  profile_image = Base64ImageField(required=False)
   class Meta:
     model = User
     exclude = ['user_token', 'password', 'forgot_password_expire', 'forgot_password_hash']  # Exclui o campo 'password'
@@ -48,6 +49,8 @@ class FinanceSerializer(serializers.ModelSerializer):
     
     
 class InstallmentSerializer(serializers.ModelSerializer):
+  installment_image = Base64ImageField(required=False)
+  
   class Meta:
     model = Installment
     fields = '__all__'
