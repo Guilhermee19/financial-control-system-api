@@ -610,25 +610,66 @@ def adjust_date_by_year(date, year_increment):
     
 
 
-@api_view(['PATCH'])
-def update_finance(request):
-    if(request.method == 'PATCH'):
-        if not 'id'in request.data:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+@api_view(['PATCH'])  # Altere de PUT para PATCH
+@permission_classes([IsAuthenticated])
+def update_finance(request, finance_id):
+    print(request.data)
+    
+    try:
+        finance = Finance.objects.get(id=finance_id)
+        
+        # Atualiza as informações do Finance conforme necessário
+        finance.description = request.data.get('description', finance.description)
+        finance.value = request.data.get('value', finance.value)
+        finance.number_of_installments = request.data.get('number_of_installments', finance.number_of_installments)
+        
+        # Atualiza a conta se um novo ID for fornecido
+        account_id = request.data.get('account', None)
+        if account_id is not None:
+            try:
+                finance.account = Conta.objects.get(id=account_id)  # Verifica se a conta existe
+            except Conta.DoesNotExist:
+                return Response({'error': 'Account not found'}, status=404)
 
-        try:
-            finance = Finance.objects.get(id=int(request.data['id']))
-            finance_serializer = FinanceSerializer(finance, data=request.data, partial=True)
+        # Atualiza a categoria se um novo ID for fornecido
+        category_id = request.data.get('category', None)
+        if category_id is not None:
+            try:
+                finance.category = Category.objects.get(id=category_id)  # Verifica se a categoria existe
+            except Category.DoesNotExist:
+                return Response({'error': 'Category not found'}, status=404)
+            
+        # Salva as mudanças no Finance
+        finance.save()
 
-            if finance_serializer.is_valid():
-                finance_serializer.save()
-            else:
-                return Response(finance_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        # Verifica se a atualização é para todos os installments
+        if request.data.get('edit_all_installments', False):
+            new_date_str = request.data.get('date', finance.date)
+            new_date = datetime.datetime.strptime(new_date_str, '%Y-%m-%d').date()  # Converte a string para um objeto de data
+            new_day = new_date.day  # Obtém o novo dia
 
-        except:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+            for installment in finance.installments.all():
+                # Mantém o mês e o ano do installment atual
+                current_date = installment.date
+                new_date = current_date.replace(day=new_day)  # Atualiza apenas o dia
+                
+                # Atualiza a data do installment
+                installment.date = new_date
+                installment.installment_value = request.data.get('value', installment.installment_value)
+                installment.save()
+        else:
+            installment = Installment.objects.get(id=int(request.data['installment_id']))
+            
+            # Atualiza o valor do installment somente se um valor específico foi fornecido
+            installment.installment_value = request.data.get('installment_value', installment.installment_value)
+            installment.save()
+        
+        return Response({'message': 'Finance and installments updated successfully'}, status=200)
 
-        return Response(finance_serializer.data)
+    except Finance.DoesNotExist:
+        return Response({'error': 'Finance not found'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=400)
 
 
 @api_view(['DELETE'])
@@ -676,7 +717,6 @@ def get_installment(request):
         return Response(finance_serializer.data)
     
 
-
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def post_installment(request):
@@ -703,7 +743,9 @@ def post_installment(request):
             "message": "Erro ao validar os dados de entrada."
         }, status=status.HTTP_400_BAD_REQUEST)
         
-
+        
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
 def pay_installment(request):
     if request.method == 'PATCH':
         installment_id = request.data.get('installment_id')
@@ -724,8 +766,8 @@ def pay_installment(request):
                 # Decodificar a imagem base64 e salvar no campo 'receipt_image'
                 format, imgstr = installment_image_base64.split(';base64,')
                 ext = format.split('/')[-1]
-                receipt_image = ContentFile(base64.b64decode(imgstr), name=f'receipt_{installment_id}.{ext}')
-                installment.receipt_image = receipt_image
+                installment_image = ContentFile(base64.b64decode(imgstr), name=f'receipt_{installment_id}.{ext}')
+                installment.installment_image = installment_image
             
             installment.save()
 
@@ -737,7 +779,64 @@ def pay_installment(request):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
 
-   
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def cancell_pay_installment(request):
+    if request.method == 'PATCH':
+        installment_id = request.data.get('installment_id')
+
+        if not installment_id:
+            return Response({"error": "Installment ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Localizar a parcela pelo ID
+            installment = Installment.objects.get(id=int(installment_id))
+            
+            # Atualizar o campo is_paid
+            installment.is_paid = False
+
+            installment.save()
+
+            return Response({"message": "Installment marked as paid and image saved successfully."}, status=status.HTTP_200_OK)
+
+        except Installment.DoesNotExist:
+            return Response({"error": "Installment not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def upload_installment_image(request):
+    if request.method == 'PATCH':
+        installment_id = request.data.get('installment_id')
+        installment_image_base64 = request.data.get('installment_image', None)
+
+        if not installment_id:
+            return Response({"error": "Installment ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not installment_image_base64:
+            return Response({"error": "Installment image is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Localizar a parcela pelo ID
+            installment = Installment.objects.get(id=int(installment_id))
+
+            # Decodificar a imagem base64 e salvar no campo 'receipt_image'
+            format, imgstr = installment_image_base64.split(';base64,')
+            ext = format.split('/')[-1]
+            installment_image = ContentFile(base64.b64decode(imgstr), name=f'receipt_{installment_id}.{ext}')
+            installment.installment_image = installment_image
+            installment.save()
+
+            return Response({"message": "Installment image uploaded successfully."}, status=status.HTTP_200_OK)
+
+        except Installment.DoesNotExist:
+            return Response({"error": "Installment not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

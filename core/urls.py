@@ -31,13 +31,13 @@ urlpatterns = [
     path('all-finances/', get_all_finances),
     path('finance-by-id/', get_finance_by_id),
     path('create-finance/', post_finance),
-    path('edit-finance/', update_finance),
+    path('edit-finance/<int:finance_id>/', update_finance),
     path('delete-finance/<int:id>/', delete_finance),
     
     #? CRUD Installment
     path('all-installment/', get_installment),
     path('pay-installment/', pay_installment),
-    # path('finance_entry/', get_finance_entry),
+    path('upload-installment-image/', upload_installment_image),
     
     #? Dashboard
     path('get-dashboard/', get_dashboard),
