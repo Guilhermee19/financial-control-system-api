@@ -14,43 +14,51 @@ class CategorySerializer(serializers.ModelSerializer):
     model = Category
     fields = '__all__'
     
-class ContaSerializer(serializers.ModelSerializer):
+
+  
+class CardSerializer(serializers.ModelSerializer):
   class Meta:
-    model = Conta
+    model = Card
+    fields = '__all__'
+  
+class AccountSerializer(serializers.ModelSerializer):
+  cards = CardSerializer(many=True, read_only=True)  # Assumindo que você tenha um relacionamento reverso
+  class Meta:
+    model = Account
+    fields = '__all__'  # Ou especifique os campos que você deseja incluir
+        
+class TransactionSerializer(serializers.ModelSerializer):
+  
+  class Meta:
+    model = Transaction
     fields = '__all__'
     
-class FinanceContaSerializer(serializers.ModelSerializer):
+    
+class InstallmentAccountSerializer(serializers.ModelSerializer):
   class Meta:
-    model = Conta
+    model = Account
     exclude = ['created_at', 'created_by', 'updated_at', 'updated_by']  # Exclui o campo 'password'
 
-class FinanceCategorySerializer(serializers.ModelSerializer):
+class InstallmentCategorySerializer(serializers.ModelSerializer):
   class Meta:
     model = Category
     fields = ['id', 'bg_color', 'color', 'name', 'percent'] 
     
-class FinanceSerializer(serializers.ModelSerializer):
+    
+class InstallmentSerializer(serializers.ModelSerializer):
+  installment_image = Base64ImageField(required=False)
   account_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
   category_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
   
   def get_account_obj(self, obj):
     if obj.account:
-        return FinanceContaSerializer(obj.account).data
+        return InstallmentAccountSerializer(obj.account).data
     return None
   
   def get_category_obj(self, obj):
     if obj.category:
-        return FinanceCategorySerializer(obj.category).data
+        return InstallmentCategorySerializer(obj.category).data
     return None
-  
-  class Meta:
-    model = Finance
-    fields = '__all__'
-    
-    
-class InstallmentSerializer(serializers.ModelSerializer):
-  installment_image = Base64ImageField(required=False)
-  
   class Meta:
     model = Installment
     fields = '__all__'

@@ -20,19 +20,26 @@ urlpatterns = [
     path('edit-category/<int:id>/', update_category),
     path('delete-category/<int:id>/', delete_category),
     
-    #? CRUD Conta
-    path('all-accounts/', get_all_contas),
-    path('account-by-id/', get_conta_by_id),
-    path('create-account/', post_conta),
-    path('edit-account/', update_conta),
-    path('delete-account/<int:id>/', delete_conta),
+    #? CRUD Account
+    path('all-accounts/', get_all_accounts),
+    path('account-by-id/', get_account_by_id),
+    path('create-account/', post_account),
+    path('edit-account/', update_account),
+    path('delete-account/<int:id>/', delete_account),
     
-    #? CRUD Finance
-    path('all-finances/', get_all_finances),
-    path('finance-by-id/', get_finance_by_id),
-    path('create-finance/', post_finance),
-    path('edit-finance/<int:finance_id>/', update_finance),
-    path('delete-finance/<int:id>/', delete_finance),
+    #? CRUD Card
+    path('all-card/', get_all_cards),
+    # path('account-by-id/', get_account_by_id),
+    # path('create-account/', post_account),
+    # path('edit-account/', update_account),
+    # path('delete-account/<int:id>/', delete_account),
+    
+    #? CRUD Transaction
+    path('all-transaction/', get_all_transaction),
+    path('transaction-by-id/', get_transaction_by_id),
+    path('create-transaction/', post_transaction),
+    path('edit-transaction/<int:transaction>/', update_transaction),
+    path('delete-transaction/<int:id>/', delete_transaction),
     
     #? CRUD Installment
     path('all-installment/', get_installment),

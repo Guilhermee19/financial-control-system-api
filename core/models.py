@@ -81,29 +81,39 @@ class BaseModel(models.Model):
     class Meta:
         abstract = True
 
+class Account(BaseModel):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='accounts')
+    name = models.CharField(max_length=100)
+    balance = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return self.name
+
+# Cartões (vinculados às contas)
+class Card(models.Model):
+    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='cards')
+    card_type = models.CharField(max_length=10, choices=[('CREDIT', 'Crédito'), ('DEBIT', 'Débito')], default='DEBIT')
+    number = models.CharField(max_length=16, unique=True)
+    expiration_date = models.DateField()
+    cardholder_name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+    credit_due_date = models.DateField()
+    balance_credit = models.DecimalField(max_digits=10, decimal_places=2)
+    card_limit = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f'{self.card_type} - {self.cardholder_name}'
+    
 class Category(BaseModel):
+    name = models.CharField(max_length=100)
     color = models.CharField(max_length=20)
     bg_color = models.CharField(max_length=20, default='#f0f2f8')
-    name = models.CharField(max_length=100)
     percent = models.DecimalField(max_digits=5, decimal_places=2)
 
     def __str__(self):
         return self.name
-
-class Conta(BaseModel):
-    name = models.CharField(max_length=100)
-    balance_debit = models.DecimalField(max_digits=10, decimal_places=2)
-    balance_credit = models.DecimalField(max_digits=10, decimal_places=2)
-    credit_limit = models.DecimalField(max_digits=10, decimal_places=2)
-    credit_due_date = models.DateField()
-    is_debit = models.BooleanField()
-    is_credit = models.BooleanField()
-
-
-    def __str__(self):
-        return self.name
-
-class Finance(BaseModel):
+    
+class Transaction(BaseModel):
     TYPE_CHOICES = [
         ('INCOME', 'Receita'),
         ('EXPENDITURE', 'Despesa'),
@@ -118,29 +128,29 @@ class Finance(BaseModel):
         ('INSTALLMENTS', 'Parcelada'),
     ]
 
-    category = models.ForeignKey(Category, null=True, on_delete=models.SET_NULL)
     date = models.DateField(null=True, blank=True)
     value = models.FloatField()
-    account = models.ForeignKey(Conta, null=True, on_delete=models.CASCADE)
     number_of_installments = models.IntegerField()
     description = models.CharField(max_length=255)
     type = models.CharField(max_length=30, default='INCOME', choices=TYPE_CHOICES)
     recurrence = models.CharField(max_length=30, default='DAILY', choices=REPEAT_CHOICES)
-
-    def __str__(self):
-        if(self.account):
-            return f"{self.id} - {self.description} ( {self.account.name} )"
-        else:
-            return f"{self.id} - {self.description}"
-
-class Installment(BaseModel):
-    finance = models.ForeignKey(Finance, related_name='installments', on_delete=models.CASCADE)
-    installment_value = models.FloatField()
-    current_installment = models.IntegerField()
-    date = models.DateField(null=True, blank=True)
-    is_paid = models.BooleanField(default=False)
-    installment_image = models.ImageField(upload_to='installments/', null=True, blank=True)
     
     def __str__(self):
-        return f"{self.finance} - Installment {self.current_installment}"
+        return f"{self.id} - {self.description}"
+
+class Installment(BaseModel):
+    transaction = models.ForeignKey(Transaction, related_name='installments', on_delete=models.CASCADE)
+    account = models.ForeignKey(Account, null=True, on_delete=models.CASCADE)
+    card = models.ForeignKey(Card, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
+    category = models.ForeignKey(Category, null=True, on_delete=models.SET_NULL)
+    installment_value = models.FloatField()
+    current_installment = models.IntegerField()
+    total_installments = models.IntegerField(default=1)
+    due_date  = models.DateField(null=True, blank=True)
+    is_paid = models.BooleanField(default=False)
+    payment_date  = models.DateField(null=True, blank=True)
+    receipt = models.ImageField(upload_to='installments/', null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.transaction} - Installment {self.current_installment}"
 

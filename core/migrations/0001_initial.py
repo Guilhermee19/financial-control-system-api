@@ -43,7 +43,6 @@ class Migration(migrations.Migration):
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('name', models.CharField(max_length=100)),
                 ('balance_debit', models.DecimalField(decimal_places=2, max_digits=10)),
-                ('balance_credit', models.DecimalField(decimal_places=2, max_digits=10)),
                 ('credit_limit', models.DecimalField(decimal_places=2, max_digits=10)),
                 ('credit_due_date', models.DateField()),
                 ('is_debit', models.BooleanField()),
