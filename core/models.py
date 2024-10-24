@@ -90,7 +90,7 @@ class Account(BaseModel):
         return self.name
 
 # Cartões (vinculados às contas)
-class Card(models.Model):
+class Card(BaseModel):
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='cards')
     card_type = models.CharField(max_length=10, choices=[('CREDIT', 'Crédito'), ('DEBIT', 'Débito')], default='DEBIT')
     number = models.CharField(max_length=16, unique=True)

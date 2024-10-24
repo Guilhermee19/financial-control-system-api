@@ -15,8 +15,20 @@ class CategorySerializer(serializers.ModelSerializer):
     fields = '__all__'
     
 
+class CardAccountSerializer(serializers.ModelSerializer):
+  class Meta:
+    model = Account
+    exclude = ['created_at', 'created_by', 'updated_at', 'updated_by']  # Exclui o campo 'password'
+    
   
 class CardSerializer(serializers.ModelSerializer):
+  account_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
+  
+  def get_account_obj(self, obj):
+    if obj.account:
+        return CardAccountSerializer(obj.account).data
+    return None
+  
   class Meta:
     model = Card
     fields = '__all__'

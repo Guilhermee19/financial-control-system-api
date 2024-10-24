@@ -430,19 +430,13 @@ def get_all_cards(request):
             created_by  = request.user
         )
         
-        all  = request.GET.get('all')
+        # PAGINATION
+        paginator = PageNumberPagination()
+        paginator.page_size = request.query_params.get('page_size', 10)
+        paginator.page_query_param = 'page'
 
-        if all:         
-            serializer = CardSerializer(cards, many=True)
-            return Response(serializer.data)
-        else:
-            # PAGINATION
-            paginator = PageNumberPagination()
-            paginator.page_size = request.query_params.get('page_size', 10)
-            paginator.page_query_param = 'page'
-
-            serializer = CardSerializer(paginator.paginate_queryset(cards, request), many=True).data
-            return paginator.get_paginated_response(serializer)
+        serializer = CardSerializer(paginator.paginate_queryset(cards, request), many=True).data
+        return paginator.get_paginated_response(serializer)
     
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
