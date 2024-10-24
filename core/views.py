@@ -180,8 +180,7 @@ def get_user_by_id(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def post_user(request):
-    if(request.method == 'POST'):
-        
+    if request.method == 'POST':
         new_user = request.data
         serializer = UserSerializer(data=new_user)
 
@@ -190,8 +189,9 @@ def post_user(request):
             item = serializer.save()
             item.set_password(request.data["password"])
             item.save()
-        
-            serializer = UserSerializer(item).data
+
+            # Remove o .data aqui
+            serializer = UserSerializer(item)
         
             return Response(serializer.data, status=status.HTTP_201_CREATED)
        
