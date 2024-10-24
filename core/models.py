@@ -82,7 +82,7 @@ class BaseModel(models.Model):
         abstract = True
 
 class Account(BaseModel):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='accounts')
+    user = models.ForeignKey(User, related_name='accounts', null=True, blank=True, on_delete=models.SET_NULL)
     name = models.CharField(max_length=100)
     balance = models.DecimalField(max_digits=10, decimal_places=2)
 
@@ -139,7 +139,7 @@ class Transaction(BaseModel):
         return f"{self.id} - {self.description}"
 
 class Installment(BaseModel):
-    transaction = models.ForeignKey(Transaction, related_name='installments', on_delete=models.CASCADE)
+    transaction = models.ForeignKey(Transaction, related_name='installments', null=True, blank=True, on_delete=models.SET_NULL)
     account = models.ForeignKey(Account, null=True, on_delete=models.CASCADE)
     card = models.ForeignKey(Card, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
     category = models.ForeignKey(Category, null=True, on_delete=models.SET_NULL)
