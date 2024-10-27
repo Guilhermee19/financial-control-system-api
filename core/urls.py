@@ -48,4 +48,5 @@ urlpatterns = [
     
     #? Dashboard
     path('get-dashboard/', get_dashboard),
+    # path('upload-file/', upload_file),
 ]                                           

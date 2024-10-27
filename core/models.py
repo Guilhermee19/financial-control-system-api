@@ -98,8 +98,8 @@ class Card(BaseModel):
     cardholder_name = models.CharField(max_length=100)
     is_active = models.BooleanField(default=True)
     credit_due_date = models.DateField()
-    balance_credit = models.DecimalField(max_digits=10, decimal_places=2)
-    card_limit = models.DecimalField(max_digits=10, decimal_places=2)
+    balance_credit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    card_limit = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     def __str__(self):
         return f'{self.card_type} - {self.cardholder_name}'

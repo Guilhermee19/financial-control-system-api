@@ -440,7 +440,31 @@ def get_all_cards(request):
     
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['POST'])
+def post_card(request):
+    if(request.method == 'POST'):
+        user = request.user
+        
+        new_card = request.data.copy()
+        
+        # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
+        new_card['created_by'] = user.id
+        new_card['updated_by'] = user.id
+        new_card['is_active'] = True
 
+        serializer = CardSerializer(data=new_card)
+        
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+       
+        # Se os dados não forem válidos, retorne os detalhes dos erros
+        return Response({
+            "errors": serializer.errors, 
+            "message": "Erro ao validar os dados de entrada."
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+        
 #?  -----------------------
 #?  -------- Transaction ---------
 #?  -----------------------
@@ -529,6 +553,8 @@ def get_transaction_by_id(request):
 @permission_classes([IsAuthenticated])
 def post_transaction(request):
     if request.method == 'POST':
+        print(request.data)
+        
         user = request.user
         new_transaction = request.data.copy()
         new_transaction['created_by'] = user.id
@@ -541,9 +567,11 @@ def post_transaction(request):
         if transaction_serializer.is_valid():
             transaction = transaction_serializer.save()
             recurrence = request.data.get('recurrence')
-            account = float(new_transaction['account'])
-            category = float(new_transaction['category'])
-            value = float(new_transaction['value'])
+            
+            account = request.data.get('account')
+            category = request.data.get('category')
+            value = request.data.get('value')
+            
             number_of_installments = int(request.data.get('number_of_installments', 1))
             due_date_str = new_transaction.get('date', str(datetime.datetime.now().date()))
             due_date = datetime.datetime.strptime(due_date_str, '%Y-%m-%d').date()
@@ -553,16 +581,16 @@ def post_transaction(request):
                 create_installments(transaction, value / number_of_installments, number_of_installments, due_date, user, account, category)
 
             elif recurrence == 'SINGLE':
-                create_installment(transaction, value, 1, due_date, user)
+                create_installment(transaction, value, 1, due_date, user, account, category)
             
             elif recurrence == 'WEEKLY':
-                create_weekly_installments(transaction, value, due_date, user)
+                create_weekly_installments(transaction, value, due_date, user, account, category)
                 
             elif recurrence == 'MONTHLY':
-                create_monthly_installments(transaction, value, due_date, user)
+                create_monthly_installments(transaction, value, due_date, user, account, category)
                 
             elif recurrence == 'ANNUAL':
-                create_annual_installments(transaction, value, due_date, user)
+                create_annual_installments(transaction, value, due_date, user, account, category)
 
             return Response(transaction_serializer.data, status=status.HTTP_201_CREATED)
         
@@ -897,3 +925,6 @@ def get_dashboard(request):
             'total_month_income': total_month_income,
             'total_month_expenditure': total_month_expenditure,
         })
+        
+        
+    

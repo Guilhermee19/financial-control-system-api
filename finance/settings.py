@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'core',
     'storages',
+    'channels',
 ]
 
 REST_FRAMEWORK = {
@@ -84,6 +85,15 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',  # Adicionado aqui
 ]
+
+ASGI_APPLICATION = "finance.asgi.application"
+
+# Configuração do canal (necessário para WebSockets)
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 ROOT_URLCONF = 'finance.urls'
 
