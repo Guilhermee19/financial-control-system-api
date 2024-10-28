@@ -1,11 +1,16 @@
 from webbrowser import get
-from django.urls import path    
+from django.urls import path   
+from rest_framework.routers import DefaultRouter 
 from .views import *     
+
+router = DefaultRouter()
+router.register(r'notifications', NotificationViewSet, basename='notification')  # Adicione o basename se necessário
 
 urlpatterns = [     
     path('auth/', auth_user),
     path('social-network/', social_network),
     path('get-user/', get_user),
+    path('notifications/', notifications_view),
     
     #? CRUD User
     path('all-users/', get_all_users),
@@ -38,7 +43,7 @@ urlpatterns = [
     path('all-transaction/', get_all_transaction),
     path('transaction-by-id/', get_transaction_by_id),
     path('create-transaction/', post_transaction),
-    path('edit-transaction/<int:transaction>/', update_transaction),
+    path('edit-transaction/<int:transaction_id>/', update_transaction),
     path('delete-transaction/<int:id>/', delete_transaction),
     
     #? CRUD Installment

@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'core',
     'storages',
     'channels',
+    'django_filters'
 ]
 
 REST_FRAMEWORK = {

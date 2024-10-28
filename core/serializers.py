@@ -2,6 +2,11 @@ from rest_framework import serializers
 from drf_base64.fields import Base64ImageField, Base64FileField
 from .models import *
 
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ['id', 'user', 'message', 'timestamp', 'is_read']
+        
 class UserSerializer(serializers.ModelSerializer):
   profile_image = Base64ImageField(required=False)
   class Meta:

@@ -1,12 +1,17 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
+# from core.models import Notification
 
 class NotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        self.group_name = "notifications"
-        # Adiciona o canal ao grupo de notificações
+        self.user = self.scope["user"]
+        print(self.user)
+        
+        self.group_name = f'user_{self.user.id}'
+
+        # Adicione o usuário ao grupo de WebSocket
         await self.channel_layer.group_add(self.group_name, self.channel_name)
-        await self.accept()  # Aceita a conexão
+        await self.accept()
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.group_name, self.channel_name)
@@ -15,7 +20,8 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         text_data_json = json.loads(text_data)
         event = text_data_json.get("event")
-
+        user = self.scope['user']  # Assume que o usuário está autenticado
+        print(user)
         # Log para verificar a mensagem recebida
         print(f"Recebido evento: {event}")
 

@@ -2,22 +2,24 @@ import base64
 from django.core.files.base import ContentFile
 from django.http import JsonResponse
 from django.db.models import Sum
-from django.db.models import Prefetch
 from rest_framework.decorators import api_view
-from rest_framework import status
 from rest_framework.response import Response
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
-from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.response import Response
 from rest_framework import status
 from .models import User, Category, Account, Transaction, Installment
 from .serializers import *
 import datetime  # Importar o módulo completo para evitar conflito
 import calendar
 
+from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
+from .models import Notification
+from .serializers import NotificationSerializer
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 import json
 import httplib2
@@ -71,7 +73,42 @@ def auth_user(request):
     else:
         return Response({"detail": "E-mail ou senha incorretos! 4"}, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def notifications_view(request):
+    notifications = Notification.objects.filter(user=request.user)  # Filtrando as notificações do usuário
+    serializer = NotificationSerializer(notifications, many=True)  # Passando o QuerySet com many=True
+    return Response(serializer.data)  # Retornando os dados serializados
 
+class NotificationViewSet(viewsets.ModelViewSet):
+    queryset = Notification.objects.all()  # Certifique-se de que isso esteja definido
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Filtra as notificações do usuário autenticado
+        return Notification.objects.filter(user=self.request.user).order_by('-timestamp')
+
+    def list(self, request, *args, **kwargs):
+        # Método para obter notificações
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def perform_create(self, serializer):
+        # Método para criar notificações
+        notification = serializer.save()
+        channel_layer = get_channel_layer()
+        # Envie a notificação pelo WebSocket
+        async_to_sync(channel_layer.group_send)(
+            f'user_{notification.user.id}',
+            {
+                'type': 'send_notification',
+                'message': notification.message
+            }
+        )
+        
+        
 @api_view(['POST'])
 # @permission_classes([AllowAny])
 def social_network(request):
@@ -661,60 +698,30 @@ def adjust_date_by_year(date, year_increment):
     
 
 
-@api_view(['PATCH'])  # Altere de PUT para PATCH
+@api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def update_transaction(request, transaction_id):
-    print(request.data)
-    
     try:
+        # Busca a transação
         transaction = Transaction.objects.get(id=transaction_id)
         
-        # Atualiza as informações do transaction conforme necessário
-        transaction.description = request.data.get('description', transaction.description)
-        transaction.value = request.data.get('value', transaction.value)
-        transaction.number_of_installments = request.data.get('number_of_installments', transaction.number_of_installments)
-        
-        # Atualiza a account se um novo ID for fornecido
-        account_id = request.data.get('account', None)
-        if account_id is not None:
-            try:
-                transaction.account = Account.objects.get(id=account_id)  # Verifica se a account existe
-            except Account.DoesNotExist:
-                return Response({'error': 'Account not found'}, status=404)
+        # Atualiza os dados básicos da transação
+        update_transaction_fields(transaction, request.data)
 
-        # Atualiza a categoria se um novo ID for fornecido
-        category_id = request.data.get('category', None)
-        if category_id is not None:
-            try:
-                transaction.category = Category.objects.get(id=category_id)  # Verifica se a categoria existe
-            except Category.DoesNotExist:
-                return Response({'error': 'Category not found'}, status=404)
-            
-        # Salva as mudanças no transaction
-        transaction.save()
-
-        # Verifica se a atualização é para todos os installments
-        if request.data.get('edit_all_installments', False):
-            new_date_str = request.data.get('date', transaction.date)
-            new_date = datetime.datetime.strptime(new_date_str, '%Y-%m-%d').date()  # Converte a string para um objeto de data
-            new_day = new_date.day  # Obtém o novo dia
-
-            for installment in transaction.installments.all():
-                # Mantém o mês e o ano do installment atual
-                current_date = installment.date
-                new_date = current_date.replace(day=new_day)  # Atualiza apenas o dia
-                
-                # Atualiza a data do installment
-                installment.date = new_date
-                installment.installment_value = request.data.get('value', installment.installment_value)
-                installment.save()
+        # Serializa e valida as alterações na transação
+        transaction_serializer = TransactionSerializer(transaction, data=request.data, partial=True)
+        if transaction_serializer.is_valid():
+            transaction_serializer.save()
         else:
-            installment = Installment.objects.get(id=int(request.data['installment_id']))
-            
-            # Atualiza o valor do installment somente se um valor específico foi fornecido
-            installment.installment_value = request.data.get('installment_value', installment.installment_value)
-            installment.save()
-        
+            return Response({"errors": transaction_serializer.errors, "message": "Erro ao validar os dados da transação."}, status=400)
+
+        # Atualiza todos os installments ou um específico
+        if request.data.get('edit_all_installments', False):
+            update_all_installments(transaction, request.data)
+        else:
+            if not update_single_installment(transaction, request.data):
+                return Response({'error': 'Installment not found'}, status=404)
+
         return Response({'message': 'Transaction and installments updated successfully'}, status=200)
 
     except Transaction.DoesNotExist:
@@ -722,6 +729,78 @@ def update_transaction(request, transaction_id):
     except Exception as e:
         return Response({'error': str(e)}, status=400)
 
+def update_transaction_fields(transaction, data):
+    """Atualiza os campos básicos de uma transação."""
+    transaction.description = data.get('description', transaction.description)
+    transaction.value = data.get('value', transaction.value)
+    transaction.number_of_installments = data.get('number_of_installments', transaction.number_of_installments)
+
+def update_related_fields(installment, data):
+    """Atualiza as relações de conta e categoria do installment, se fornecidas."""
+    account_id = data.get('account')
+    category_id = data.get('category')
+
+    # Atualiza a conta se fornecida
+    if account_id:
+        try:
+            installment.account = Account.objects.get(id=account_id)
+        except Account.DoesNotExist:
+            return Response({'error': 'Account not found'}, status=404)
+
+    # Atualiza a categoria se fornecida
+    if category_id:
+        try:
+            installment.category = Category.objects.get(id=category_id)
+        except Category.DoesNotExist:
+            return Response({'error': 'Category not found'}, status=404)
+
+    return True
+
+def update_all_installments(transaction, data):
+    """Atualiza todos os installments relacionados a uma transação."""
+    new_day = datetime.datetime.strptime(data.get('date', str(transaction.date)), '%Y-%m-%d').date().day
+    for installment in transaction.installments.all():
+        updated_due_date = installment.due_date.replace(day=new_day)
+        installment_data = {
+            'installment_value': data.get('value', installment.installment_value),
+            'due_date': updated_due_date,
+        }
+
+        # Atualiza a conta e a categoria do installment, se fornecidas
+        related_update_response = update_related_fields(installment, data)
+        if isinstance(related_update_response, Response):
+            return related_update_response  # Retorna erro se a conta ou categoria não for encontrada
+        
+        save_installment(installment, installment_data)
+
+def update_single_installment(transaction, data):
+    """Atualiza um único installment da transação."""
+    installment_id = data.get('installment_id')
+    try:
+        installment = Installment.objects.get(id=installment_id, transaction=transaction)
+    except Installment.DoesNotExist:
+        return Response({'error': 'Installment not found'}, status=404)
+    
+    installment_data = {
+        'installment_value': data.get('installment_value', installment.installment_value),
+        'due_date': data.get('due_date', installment.due_date)
+    }
+
+    # Atualiza a conta e a categoria do installment, se fornecidas
+    related_update_response = update_related_fields(installment, data)
+    if isinstance(related_update_response, Response):
+        return related_update_response  # Retorna erro se a conta ou categoria não for encontrada
+    
+    return save_installment(installment, installment_data)
+
+def save_installment(installment, data):
+    """Salva um installment com os dados fornecidos."""
+    installment_serializer = InstallmentSerializer(installment, data=data, partial=True)
+    if installment_serializer.is_valid():
+        installment_serializer.save()
+        return True
+    else:
+        raise ValueError("Erro ao validar os dados do installment: " + str(installment_serializer.errors))
 
 @api_view(['DELETE'])
 def delete_transaction(request, id):
