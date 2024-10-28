@@ -73,8 +73,8 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'finance.urls'
-WSGI_APPLICATION = 'finance.wsgi.application'
-ASGI_APPLICATION = "finance.asgi.application"
+# WSGI_APPLICATION = 'finance.wsgi.application'
+# ASGI_APPLICATION = "finance.asgi.application"
 
 TEMPLATES = [
     {
