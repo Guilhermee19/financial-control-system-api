@@ -91,7 +91,6 @@ class BaseModel(models.Model):
         abstract = True
 
 class Account(BaseModel):
-    user = models.ForeignKey(User, related_name='accounts', null=True, blank=True, on_delete=models.SET_NULL)
     name = models.CharField(max_length=100)
     balance = models.DecimalField(max_digits=10, decimal_places=2)
 
@@ -148,6 +147,12 @@ class Transaction(BaseModel):
         return f"{self.id} - {self.description}"
 
 class Installment(BaseModel):
+    TYPE_CHOICES = [
+        ('INCOME', 'Receita'),
+        ('EXPENDITURE', 'Despesa'),
+        ('TRANSFER', 'Transferência')
+    ]
+        
     transaction = models.ForeignKey(Transaction, related_name='installments', null=True, blank=True, on_delete=models.SET_NULL)
     account = models.ForeignKey(Account, null=True, on_delete=models.CASCADE)
     card = models.ForeignKey(Card, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
@@ -158,6 +163,7 @@ class Installment(BaseModel):
     due_date  = models.DateField(null=True, blank=True)
     is_paid = models.BooleanField(default=False)
     payment_date  = models.DateField(null=True, blank=True)
+    type = models.CharField(max_length=30, default='INCOME', choices=TYPE_CHOICES)
     receipt = models.ImageField(upload_to='installments/', null=True, blank=True)
     
     def __str__(self):

@@ -366,6 +366,20 @@ def get_all_accounts(request):
             created_by  = request.user
         )
         
+        for account in accounts:
+            # Obtém todas as parcelas (installments) relacionadas a essa conta
+            installments = Installment.objects.filter(account_id=account.id, created_by=request.user)
+            
+            # Calcula o saldo total com base no tipo de cada installment
+            total_balance = sum(
+                installment.installment_value if installment.transaction.type == 'INCOME' else -installment.installment_value 
+                for installment in installments
+            )
+            
+            # Atualiza o saldo da conta com o valor total calculado
+            account.balance = total_balance if total_balance > 0 else 0
+            account.save()  # Salva as mudanças no saldo da conta
+        
         all  = request.GET.get('all')
 
         if all:         
@@ -608,6 +622,7 @@ def post_transaction(request):
             account = request.data.get('account')
             category = request.data.get('category')
             value = request.data.get('value')
+            type = request.data.get('type')
             
             number_of_installments = int(request.data.get('number_of_installments', 1))
             due_date_str = new_transaction.get('date', str(datetime.datetime.now().date()))
@@ -615,26 +630,26 @@ def post_transaction(request):
             
             # Cria parcelas baseadas no tipo de recorrência
             if recurrence == 'INSTALLMENTS' and number_of_installments > 0:
-                create_installments(transaction, value / number_of_installments, number_of_installments, due_date, user, account, category)
+                create_installments(transaction, value / number_of_installments, number_of_installments, due_date, user, type, account, category)
 
             elif recurrence == 'SINGLE':
-                create_installment(transaction, value, 1, due_date, user, account, category)
+                create_installment(transaction, value, 1, due_date, user, type, account, category)
             
             elif recurrence == 'WEEKLY':
-                create_weekly_installments(transaction, value, due_date, user, account, category)
+                create_weekly_installments(transaction, value, due_date, user, type, account, category)
                 
             elif recurrence == 'MONTHLY':
-                create_monthly_installments(transaction, value, due_date, user, account, category)
+                create_monthly_installments(transaction, value, due_date, user, type, account, category)
                 
             elif recurrence == 'ANNUAL':
-                create_annual_installments(transaction, value, due_date, user, account, category)
+                create_annual_installments(transaction, value, due_date, user, type, account, category)
 
             return Response(transaction_serializer.data, status=status.HTTP_201_CREATED)
         
         return Response({"errors": transaction_serializer.errors, "message": "Erro ao validar os dados do transaction."}, status=status.HTTP_400_BAD_REQUEST)
     
 # Função para criar uma única parcela
-def create_installment(transaction, value, current_installment, due_date, user, account, category):
+def create_installment(transaction, value, current_installment, due_date, user, type, account, category):
     installment_data = {
         'transaction': transaction.id,
         'account': account,
@@ -657,31 +672,31 @@ def validate_and_save_installment(installment_data):
         raise ValueError(serializer.errors)
 
 # Função para criar múltiplas parcelas
-def create_installments(transaction, installment_value, number_of_installments, due_date, user, account, category):
+def create_installments(transaction, installment_value, number_of_installments, due_date, user, type, account, category):
     
     for i in range(number_of_installments):
         new_due_date = adjust_date_by_month(due_date, i)
-        create_installment(transaction, installment_value, i + 1, new_due_date, user, account, category)
+        create_installment(transaction, installment_value, i + 1, new_due_date, user, type, account, category)
 
 # Função para criar parcelas semanais até o final do ano
-def create_weekly_installments(transaction, value, due_date, user, account, category):
+def create_weekly_installments(transaction, value, due_date, user, type, account, category):
     installment_number = 1
     while due_date <= datetime.datetime.date(due_date.year, 12, 31):
-        create_installment(transaction, value, installment_number, due_date, user, account, category)
+        create_installment(transaction, value, installment_number, due_date, user, type, account, category)
         due_date += datetime.datetime.timedelta(days=7)
         installment_number += 1
 
 # Função para criar parcelas mensais
-def create_monthly_installments(transaction, value, due_date, user, account, category):
+def create_monthly_installments(transaction, value, due_date, user, type, account, category):
     for i in range(13 - due_date.month):
         new_due_date = adjust_date_by_month(due_date, i)
-        create_installment(transaction, value, i + 1, new_due_date, user, account, category)
+        create_installment(transaction, value, i + 1, new_due_date, user, type, account, category)
 
 # Função para criar parcelas anuais
-def create_annual_installments(transaction, value, due_date, user, account, category):
+def create_annual_installments(transaction, value, due_date, user, type, account, category):
     for i in range(5):
         new_due_date = adjust_date_by_year(due_date, i)
-        create_installment(transaction, value, i + 1, new_due_date, user, account, category)
+        create_installment(transaction, value, i + 1, new_due_date, user, type, account, category)
 
 # Ajusta a data adicionando meses e lidando com meses curtos
 def adjust_date_by_month(date, month_increment):
@@ -696,7 +711,6 @@ def adjust_date_by_year(date, year_increment):
     last_day_of_month = calendar.monthrange(new_year, date.month)[1]
     return datetime.date(new_year, date.month, min(date.day, last_day_of_month))
     
-
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
@@ -764,6 +778,7 @@ def update_all_installments(transaction, data):
         installment_data = {
             'installment_value': data.get('value', installment.installment_value),
             'due_date': updated_due_date,
+            'type': data.get('type', installment.type)
         }
 
         # Atualiza a conta e a categoria do installment, se fornecidas
@@ -783,7 +798,8 @@ def update_single_installment(transaction, data):
     
     installment_data = {
         'installment_value': data.get('installment_value', installment.installment_value),
-        'due_date': data.get('due_date', installment.due_date)
+        'due_date': data.get('due_date', installment.due_date),
+        'type': data.get('type', installment.type)
     }
 
     # Atualiza a conta e a categoria do installment, se fornecidas
@@ -801,6 +817,7 @@ def save_installment(installment, data):
         return True
     else:
         raise ValueError("Erro ao validar os dados do installment: " + str(installment_serializer.errors))
+
 
 @api_view(['DELETE'])
 def delete_transaction(request, id):
@@ -873,6 +890,18 @@ def post_installment(request):
             "message": "Erro ao validar os dados de entrada."
         }, status=status.HTTP_400_BAD_REQUEST)
         
+        
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_installment(request, id):
+    try:
+        installment = Installment.objects.get(id=int(id))
+        installment.delete()
+    except:
+        return Response({'detail': 'installment not found'}, status=status.HTTP_400_BAD_REQUEST)
+
+    return Response({'worked': True})
+
         
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
