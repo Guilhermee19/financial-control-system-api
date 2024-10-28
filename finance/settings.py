@@ -76,6 +76,22 @@ ROOT_URLCONF = 'finance.urls'
 WSGI_APPLICATION = 'finance.wsgi.application'
 ASGI_APPLICATION = "finance.asgi.application"
 
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [BASE_DIR / 'templates'],  # Optional: define template directories here
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
 # Database configuration
 DATABASES = {
     'default': {
