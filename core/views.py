@@ -540,7 +540,7 @@ def get_all_transaction(request):
         # Step 1: Filter Installments within the date range
         installments = Installment.objects.filter(
             due_date__gte=start_date,
-            due_date__lt=end_date
+            due_date__lte=end_date
         ).order_by('due_date')
 
         # Step 2: Get Transaction IDs that have matching installments
@@ -798,7 +798,7 @@ def update_single_installment(transaction, data):
     
     installment_data = {
         'installment_value': data.get('installment_value', installment.installment_value),
-        'due_date': data.get('due_date', installment.due_date),
+        'due_date': data.get('date', installment.due_date),
         'type': data.get('type', installment.type)
     }
 
