@@ -9,10 +9,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
-from .models import User, Category, Account, Transaction, Installment
+from .models import User, Category, Account, Transaction
 from .serializers import *
 import datetime  # Importar o módulo completo para evitar conflito
-import calendar
+from datetime import timedelta
+from dateutil.relativedelta import relativedelta  # Para adicionar meses e anos
 
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -359,30 +360,29 @@ def delete_category(request, id):
 #?  -------- Account ---------
 #?  -----------------------
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])  # Adicione esta linha para garantir que o usuário esteja autenticado
 def get_all_accounts(request):
-    if(request.method == 'GET'):
-        # Filtrar Transaction que possuem as Installments filtradas
-        accounts = Account.objects.filter(
-            created_by  = request.user
-        )
-        
+    if request.method == 'GET':
+        # Filtrar as contas criadas pelo usuário autenticado
+        accounts = Account.objects.filter(created_by=request.user)
+
         for account in accounts:
-            # Obtém todas as parcelas (installments) relacionadas a essa conta
-            installments = Installment.objects.filter(account_id=account.id, created_by=request.user)
-            
-            # Calcula o saldo total com base no tipo de cada installment
+            # Obtém todas as transações relacionadas a essa conta
+            transactions = Transaction.objects.filter(account=account, created_by=request.user)
+
+            # Calcula o saldo total com base no tipo de cada transação
             total_balance = sum(
-                installment.installment_value if installment.transaction.type == 'INCOME' else -installment.installment_value 
-                for installment in installments
+                transaction.value_installment if transaction.type == 'INCOME' else -transaction.value_installment
+                for transaction in transactions
             )
-            
+
             # Atualiza o saldo da conta com o valor total calculado
             account.balance = total_balance if total_balance > 0 else 0
             account.save()  # Salva as mudanças no saldo da conta
-        
-        all  = request.GET.get('all')
 
-        if all:         
+        all_param = request.GET.get('all')
+
+        if all_param:         
             serializer = AccountSerializer(accounts, many=True)
             return Response(serializer.data)
         else:
@@ -393,7 +393,7 @@ def get_all_accounts(request):
 
             serializer = AccountSerializer(paginator.paginate_queryset(accounts, request), many=True).data
             return paginator.get_paginated_response(serializer)
-    
+
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -476,7 +476,7 @@ def delete_account(request, id):
 @api_view(['GET'])
 def get_all_cards(request):
     if(request.method == 'GET'):
-        # Filtrar Transaction que possuem as Installments filtradas
+
         cards = Card.objects.filter(
             created_by  = request.user
         )
@@ -523,7 +523,6 @@ def post_card(request):
 @permission_classes([IsAuthenticated])
 def get_all_transaction(request):
     if request.method == 'GET':
-        return_all = request.GET.get('return_all', 'false').lower() == 'true'
         start_date = request.GET.get('start_date')
         end_date = request.GET.get('end_date')
 
@@ -537,51 +536,16 @@ def get_all_transaction(request):
         except ValueError:
             return Response({"error": "Invalid date format, use YYYY-MM-DD"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Step 1: Filter Installments within the date range
-        installments = Installment.objects.filter(
-            due_date__gte=start_date,
-            due_date__lte=end_date
-        ).order_by('due_date')
-
-        # Step 2: Get Transaction IDs that have matching installments
-        transaction_ids = installments.values_list('transaction_id', flat=True).distinct()
-
-        # Step 3: Filter transactions that match the filtered installments and user
+        # transactions = Transaction.objects.all()
+        
         transactions = Transaction.objects.filter(
-            id__in=transaction_ids,
-            created_by=request.user
-        ).order_by('date')
-
-        # Step 4: Attach installments to each transaction and duplicate transaction if necessary
-        transaction_with_installments = []
-        for transaction in transactions:
-            # Get all installments for this transaction within the date range
-            transaction_installments = installments.filter(transaction=transaction)
-
-            # Loop through each installment and create a separate transaction entry for each one
-            for installment in transaction_installments:
-                # Serialize the transaction
-                transaction_data = TransactionSerializer(transaction).data
-
-                # Add the single installment to the transaction data
-                installment_data = InstallmentSerializer(installment).data
-                transaction_data['installment'] = installment_data
-
-                # Append the transaction with this specific installment
-                transaction_with_installments.append(transaction_data)
-
-        # Step 5: If return_all is True, return all results without pagination
-        if return_all:
-            return Response(transaction_with_installments, status=status.HTTP_200_OK)
-
-        # Step 6: Apply pagination
-        paginator = PageNumberPagination()
-        paginator.page_size = request.query_params.get('page_size', 10)
-
-        paginated_transactions = paginator.paginate_queryset(transaction_with_installments, request)
-
-        return paginator.get_paginated_response(paginated_transactions)
-
+            expiry_date__gte=start_date,
+            expiry_date__lte=end_date
+        ).order_by('expiry_date')
+        
+        serializer = TransactionSerializer(transactions, many=True)
+        return Response(serializer.data)
+    
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -602,222 +566,121 @@ def get_transaction_by_id(request):
         
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def post_transaction(request):
+def create_transaction(request):
     if request.method == 'POST':
-        print(request.data)
-        
         user = request.user
-        new_transaction = request.data.copy()
-        new_transaction['created_by'] = user.id
-        new_transaction['updated_by'] = user.id
         
-        transaction_serializer = TransactionSerializer(data=new_transaction)
-
-
-        # Verifique se os dados do transaction são válidos
-        if transaction_serializer.is_valid():
-            transaction = transaction_serializer.save()
-            recurrence = request.data.get('recurrence')
-            
-            account = request.data.get('account')
-            category = request.data.get('category')
-            value = request.data.get('value')
-            type = request.data.get('type')
-            
-            number_of_installments = int(request.data.get('number_of_installments', 1))
-            due_date_str = new_transaction.get('date', str(datetime.datetime.now().date()))
-            due_date = datetime.datetime.strptime(due_date_str, '%Y-%m-%d').date()
-            
-            # Cria parcelas baseadas no tipo de recorrência
-            if recurrence == 'INSTALLMENTS' and number_of_installments > 0:
-                create_installments(transaction, value / number_of_installments, number_of_installments, due_date, user, type, account, category)
-
-            elif recurrence == 'SINGLE':
-                create_installment(transaction, value, 1, due_date, user, type, account, category)
-            
-            elif recurrence == 'WEEKLY':
-                create_weekly_installments(transaction, value, due_date, user, type, account, category)
-                
-            elif recurrence == 'MONTHLY':
-                create_monthly_installments(transaction, value, due_date, user, type, account, category)
-                
-            elif recurrence == 'ANNUAL':
-                create_annual_installments(transaction, value, due_date, user, type, account, category)
-
-            return Response(transaction_serializer.data, status=status.HTTP_201_CREATED)
+        # Obter os dados da requisição
+        data = request.data.copy()
+        installments = int(data.get('installments', 1))  # Garantir que é um inteiro
         
-        return Response({"errors": transaction_serializer.errors, "message": "Erro ao validar os dados do transaction."}, status=status.HTTP_400_BAD_REQUEST)
-    
-# Função para criar uma única parcela
-def create_installment(transaction, value, current_installment, due_date, user, type, account, category):
-    installment_data = {
-        'transaction': transaction.id,
-        'account': account,
-        'category': category,
-        'installment_value': value,
-        'current_installment': current_installment,
-        'due_date': due_date,
-        'is_paid': False,
-        'created_by': user.id,
-        'updated_by': user.id
-    }
-    validate_and_save_installment(installment_data)
+        # Atribuir o ID do usuário autenticado aos campos 'created_by' e 'updated_by'
+        data['created_by'] = user.id  # Atribui o ID do usuário
+        data['updated_by'] = user.id  # Atribui o ID do usuário
+        
+        # Calcular o valor de cada parcela
+        if installments > 0:
+            value_installment = data.get('value', 0) / installments  # Divide o valor total pelo número de parcelas
+            data['value_installment'] = value_installment  # Ajusta o valor total da transação para o valor da parcela
 
-# Função para validar e salvar cada parcela
-def validate_and_save_installment(installment_data):
-    serializer = InstallmentSerializer(data=installment_data)
-    if serializer.is_valid():
-        serializer.save()
-    else:
-        raise ValueError(serializer.errors)
+        # Criar a transação principal
+        serializer = TransactionSerializer(data=data)
+        if serializer.is_valid():
+            # Salva a transação única inicial
+            transaction = serializer.save(installments=installments, related_transaction=None)  
+            base_expiry_date = transaction.expiry_date  # Salvar a data de vencimento base
+            transaction_group = transaction.pk  # Usa o ID da transação principal como grupo
 
-# Função para criar múltiplas parcelas
-def create_installments(transaction, installment_value, number_of_installments, due_date, user, type, account, category):
-    
-    for i in range(number_of_installments):
-        new_due_date = adjust_date_by_month(due_date, i)
-        create_installment(transaction, installment_value, i + 1, new_due_date, user, type, account, category)
+            # Se houver parcelas, criar as transações adicionais
+            for i in range(1, installments):
+                # Calcular a nova data de vencimento com base na recorrência
+                if transaction.recurrence == 'WEEKLY':
+                    new_expiry_date = base_expiry_date + timedelta(weeks=i)
+                elif transaction.recurrence == 'MONTHLY':
+                    new_expiry_date = base_expiry_date + relativedelta(months=i)
+                elif transaction.recurrence == 'ANNUAL':
+                    new_expiry_date = base_expiry_date + relativedelta(years=i)
+                else:
+                    new_expiry_date = base_expiry_date  # Para SINGLE ou outros tipos, usar a mesma data
 
-# Função para criar parcelas semanais até o final do ano
-def create_weekly_installments(transaction, value, due_date, user, type, account, category):
-    installment_number = 1
-    while due_date <= datetime.datetime.date(due_date.year, 12, 31):
-        create_installment(transaction, value, installment_number, due_date, user, type, account, category)
-        due_date += datetime.datetime.timedelta(days=7)
-        installment_number += 1
+                # Criar a nova transação com a nova data de vencimento
+                Transaction.objects.create(
+                    value=transaction.value,  # O valor da parcela
+                    value_installment=value_installment,  # O valor da parcela
+                    description=transaction.description,
+                    account=transaction.account,
+                    category=transaction.category,
+                    expiry_date=new_expiry_date,
+                    is_paid=False,  # Inicialmente não paga
+                    date_payment=None,
+                    receipt=None,
+                    current_installment=i+1,
+                    installments=installments,  # Cada transação de parcela é única
+                    related_transaction=transaction,  # Associa a transação original
+                    type=transaction.type,  # Copia o tipo de transação
+                    recurrence=transaction.recurrence,  # Copia a recorrência da transação
+                    created_by=user,  # Atribuindo a instância do usuário
+                    updated_by=user   # Atribuindo a instância do usuário
+                )
 
-# Função para criar parcelas mensais
-def create_monthly_installments(transaction, value, due_date, user, type, account, category):
-    for i in range(13 - due_date.month):
-        new_due_date = adjust_date_by_month(due_date, i)
-        create_installment(transaction, value, i + 1, new_due_date, user, type, account, category)
+            return Response({"transaction_group": str(transaction_group)}, status=status.HTTP_201_CREATED)
 
-# Função para criar parcelas anuais
-def create_annual_installments(transaction, value, due_date, user, type, account, category):
-    for i in range(5):
-        new_due_date = adjust_date_by_year(due_date, i)
-        create_installment(transaction, value, i + 1, new_due_date, user, type, account, category)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# Ajusta a data adicionando meses e lidando com meses curtos
-def adjust_date_by_month(date, month_increment):
-    new_month = (date.month + month_increment - 1) % 12 + 1
-    new_year = date.year + (date.month + month_increment - 1) // 12
-    last_day_of_month = calendar.monthrange(new_year, new_month)[1]
-    return datetime.date(new_year, new_month, min(date.day, last_day_of_month))
-
-# Ajusta a data adicionando anos
-def adjust_date_by_year(date, year_increment):
-    new_year = date.year + year_increment
-    last_day_of_month = calendar.monthrange(new_year, date.month)[1]
-    return datetime.date(new_year, date.month, min(date.day, last_day_of_month))
-    
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
 def update_transaction(request, transaction_id):
-    try:
-        # Busca a transação
-        transaction = Transaction.objects.get(id=transaction_id)
-        
-        # Atualiza os dados básicos da transação
-        update_transaction_fields(transaction, request.data)
-
-        # Serializa e valida as alterações na transação
-        transaction_serializer = TransactionSerializer(transaction, data=request.data, partial=True)
-        if transaction_serializer.is_valid():
-            transaction_serializer.save()
-        else:
-            return Response({"errors": transaction_serializer.errors, "message": "Erro ao validar os dados da transação."}, status=400)
-
-        # Atualiza todos os installments ou um específico
-        if request.data.get('edit_all_installments', False):
-            update_all_installments(transaction, request.data)
-        else:
-            if not update_single_installment(transaction, request.data):
-                return Response({'error': 'Installment not found'}, status=404)
-
-        return Response({'message': 'Transaction and installments updated successfully'}, status=200)
-
-    except Transaction.DoesNotExist:
-        return Response({'error': 'Transaction not found'}, status=404)
-    except Exception as e:
-        return Response({'error': str(e)}, status=400)
-
-def update_transaction_fields(transaction, data):
-    """Atualiza os campos básicos de uma transação."""
-    transaction.description = data.get('description', transaction.description)
-    transaction.value = data.get('value', transaction.value)
-    transaction.number_of_installments = data.get('number_of_installments', transaction.number_of_installments)
-
-def update_related_fields(installment, data):
-    """Atualiza as relações de conta e categoria do installment, se fornecidas."""
-    account_id = data.get('account')
-    category_id = data.get('category')
-
-    # Atualiza a conta se fornecida
-    if account_id:
+    if request.method == 'PATCH':
         try:
-            installment.account = Account.objects.get(id=account_id)
-        except Account.DoesNotExist:
-            return Response({'error': 'Account not found'}, status=404)
+            # Buscar a transação principal
+            transaction = Transaction.objects.get(id=transaction_id)
+        except Transaction.DoesNotExist:
+            return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    # Atualiza a categoria se fornecida
-    if category_id:
-        try:
-            installment.category = Category.objects.get(id=category_id)
-        except Category.DoesNotExist:
-            return Response({'error': 'Category not found'}, status=404)
-
-    return True
-
-def update_all_installments(transaction, data):
-    """Atualiza todos os installments relacionados a uma transação."""
-    new_day = datetime.datetime.strptime(data.get('date', str(transaction.date)), '%Y-%m-%d').date().day
-    for installment in transaction.installments.all():
-        updated_due_date = installment.due_date.replace(day=new_day)
-        installment_data = {
-            'installment_value': data.get('value', installment.installment_value),
-            'due_date': updated_due_date,
-            'type': data.get('type', installment.type)
-        }
-
-        # Atualiza a conta e a categoria do installment, se fornecidas
-        related_update_response = update_related_fields(installment, data)
-        if isinstance(related_update_response, Response):
-            return related_update_response  # Retorna erro se a conta ou categoria não for encontrada
+        # Obter os dados da requisição
+        data = request.data.copy()
         
-        save_installment(installment, installment_data)
+        installments = int(data.get('installments', 1))  # Garantir que é um inteiro
+        
+          
+        # Calcular o valor de cada parcela
+        if installments > 0:
+            value_installment = data.get('value', 0) / installments  # Divide o valor total pelo número de parcelas
+            data['value_installment'] = value_installment  # Ajusta o valor total da transação para o valor da parcela
+            
+        # Atualizar a transação principal
+        serializer = TransactionSerializer(transaction, data=data, partial=True)  # Use partial=True para permitir atualizações parciais
+        if serializer.is_valid():
+            updated_transaction = serializer.save()  # Salva a transação atualizada
+            
+            # Checar se o parâmetro edit_all_installments está definido como True
+            edit_all_installments = data.get('edit_all_installments', False)
 
-def update_single_installment(transaction, data):
-    """Atualiza um único installment da transação."""
-    installment_id = data.get('installment_id')
-    try:
-        installment = Installment.objects.get(id=installment_id, transaction=transaction)
-    except Installment.DoesNotExist:
-        return Response({'error': 'Installment not found'}, status=404)
-    
-    installment_data = {
-        'installment_value': data.get('installment_value', installment.installment_value),
-        'due_date': data.get('date', installment.due_date),
-        'type': data.get('type', installment.type)
-    }
+            # Se edit_all_installments for verdadeiro, atualizar todas as transações relacionadas
+            if edit_all_installments:
+                related_transactions = Transaction.objects.filter(related_transaction=updated_transaction)
 
-    # Atualiza a conta e a categoria do installment, se fornecidas
-    related_update_response = update_related_fields(installment, data)
-    if isinstance(related_update_response, Response):
-        return related_update_response  # Retorna erro se a conta ou categoria não for encontrada
-    
-    return save_installment(installment, installment_data)
+                # Calcular o novo valor da parcela, se houver parcelas
+                total_value = updated_transaction.value
+                installments = updated_transaction.installments
 
-def save_installment(installment, data):
-    """Salva um installment com os dados fornecidos."""
-    installment_serializer = InstallmentSerializer(installment, data=data, partial=True)
-    if installment_serializer.is_valid():
-        installment_serializer.save()
-        return True
-    else:
-        raise ValueError("Erro ao validar os dados do installment: " + str(installment_serializer.errors))
+                if installments > 0:
+                    new_value_installment = total_value / installments
+                    
+                    # Atualizar o value_installment e o related_transaction das transações relacionadas
+                    related_transactions.update(
+                        value_installment=new_value_installment, 
+                        value=data['value'], 
+                        description=data['description'], 
+                        account=data['account'], 
+                        category=data['category'], 
+                        related_transaction=updated_transaction
+                    )
 
+            return Response({"message": "Transaction updated successfully."}, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['DELETE'])
 def delete_transaction(request, id):
@@ -829,210 +692,211 @@ def delete_transaction(request, id):
 
     return Response({'worked': True})
 
-
-#?  -----------------------
-#?  -------- Installment ---------
-#?  -----------------------
-@api_view(['GET'])
-def get_Installment(request):
-    if(request.method == 'GET'):
-        Installments = Installment.objects.all()
-        serializer = InstallmentSerializer(Installments, many=True)
-        return Response(serializer.data)
-    
-    return Response(status=status.HTTP_400_BAD_REQUEST)
-
-
+      
 @api_view(['PATCH'])
-def get_installment(request):
-    if(request.method == 'PATCH'):
-        if not 'id'in request.data:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            transaction = Transaction.objects.get(id=int(request.data['id']))
-            transaction_serializer = TransactionSerializer(transaction, data=request.data, partial=True)
-
-            if transaction_serializer.is_valid():
-                transaction_serializer.save()
-            else:
-                return Response(transaction_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        except:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(transaction_serializer.data)
-    
-
-@api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def post_installment(request):
-    if(request.method == 'POST'):
-        
-        user = request.user
-        new_instalment = request.data.copy()  # Crie uma cópia dos dados do request
-        
-        # Atribua o usuário autenticado aos campos 'created_by' e 'updated_by'
-        new_instalment['created_by'] = user.id
-        new_instalment['updated_by'] = user.id
-        
-        # Serializar os dados recebidos
-        serializer = InstallmentSerializer(data=new_instalment)
+def pay_transaction(request):
+    transaction_id = request.data.get('transaction_id')
+    receipt_image_base64 = request.data.get('receipt_image', None)
 
-        # Verifique se os dados são válidos
-        if serializer.is_valid():
-            serializer.save()  # Salve o novo objeto no banco de dados
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-       
-        # Se os dados não forem válidos, retorne os detalhes dos erros
-        return Response({
-            "errors": serializer.errors, 
-            "message": "Erro ao validar os dados de entrada."
-        }, status=status.HTTP_400_BAD_REQUEST)
-        
-        
-@api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
-def delete_installment(request, id):
+    if not transaction_id:
+        return Response({"error": "Transaction ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
-        installment = Installment.objects.get(id=int(id))
-        installment.delete()
-    except:
-        return Response({'detail': 'installment not found'}, status=status.HTTP_400_BAD_REQUEST)
+        # Localizar a transação pelo ID e marcar como paga
+        transaction = Transaction.objects.get(id=transaction_id, created_by=request.user)
+        transaction.is_paid = True
 
-    return Response({'worked': True})
-
-        
-@api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
-def pay_installment(request):
-    if request.method == 'PATCH':
-        installment_id = request.data.get('installment_id')
-        installment_image_base64 = request.data.get('installment_image', None)
-
-        if not installment_id:
-            return Response({"error": "Installment ID is required."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            # Localizar a parcela pelo ID
-            installment = Installment.objects.get(id=int(installment_id))
-            
-            # Atualizar o campo is_paid
-            installment.is_paid = True
-
-            # Verificar se uma imagem foi enviada
-            if installment_image_base64:
-                # Decodificar a imagem base64 e salvar no campo 'receipt_image'
-                format, imgstr = installment_image_base64.split(';base64,')
-                ext = format.split('/')[-1]
-                installment_image = ContentFile(base64.b64decode(imgstr), name=f'receipt_{installment_id}.{ext}')
-                installment.installment_image = installment_image
-            
-            installment.save()
-
-            return Response({"message": "Installment marked as paid and image saved successfully."}, status=status.HTTP_200_OK)
-
-        except Installment.DoesNotExist:
-            return Response({"error": "Installment not found."}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
-
-@api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
-def cancell_pay_installment(request):
-    if request.method == 'PATCH':
-        installment_id = request.data.get('installment_id')
-
-        if not installment_id:
-            return Response({"error": "Installment ID is required."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            # Localizar a parcela pelo ID
-            installment = Installment.objects.get(id=int(installment_id))
-            
-            # Atualizar o campo is_paid
-            installment.is_paid = False
-
-            installment.save()
-
-            return Response({"message": "Installment marked as paid and image saved successfully."}, status=status.HTTP_200_OK)
-
-        except Installment.DoesNotExist:
-            return Response({"error": "Installment not found."}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-    
-    
-
-@api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
-def upload_installment_image(request):
-    if request.method == 'PATCH':
-        installment_id = request.data.get('installment_id')
-        installment_image_base64 = request.data.get('installment_image', None)
-
-        if not installment_id:
-            return Response({"error": "Installment ID is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not installment_image_base64:
-            return Response({"error": "Installment image is required."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            # Localizar a parcela pelo ID
-            installment = Installment.objects.get(id=int(installment_id))
-
-            # Decodificar a imagem base64 e salvar no campo 'receipt_image'
-            format, imgstr = installment_image_base64.split(';base64,')
+        # Verificar se uma imagem foi enviada
+        if receipt_image_base64:
+            # Decodificar a imagem base64 e salvar no campo 'receipt'
+            format, imgstr = receipt_image_base64.split(';base64,')
             ext = format.split('/')[-1]
-            installment_image = ContentFile(base64.b64decode(imgstr), name=f'receipt_{installment_id}.{ext}')
-            installment.installment_image = installment_image
-            installment.save()
+            receipt_image = ContentFile(base64.b64decode(imgstr), name=f'receipt_{transaction_id}.{ext}')
+            transaction.receipt = receipt_image
 
-            return Response({"message": "Installment image uploaded successfully."}, status=status.HTTP_200_OK)
+        transaction.save()
+        return Response({"message": "Transaction marked as paid and image saved successfully."}, status=status.HTTP_200_OK)
 
-        except Installment.DoesNotExist:
-            return Response({"error": "Installment not found."}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    except Transaction.DoesNotExist:
+        return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
 
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def cancel_pay_transaction(request):
+    transaction_id = request.data.get('transaction_id')
+
+    if not transaction_id:
+        return Response({"error": "Transaction ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Localizar a transação pelo ID e marcar como não paga
+        transaction = Transaction.objects.get(id=transaction_id, created_by=request.user)
+        transaction.is_paid = False
+        transaction.save()
+
+        return Response({"message": "Transaction payment canceled successfully."}, status=status.HTTP_200_OK)
+
+    except Transaction.DoesNotExist:
+        return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def upload_transaction_image(request):
+    transaction_id = request.data.get('transaction_id')
+    receipt_image_base64 = request.data.get('receipt_image', None)
+
+    if not transaction_id:
+        return Response({"error": "Transaction ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not receipt_image_base64:
+        return Response({"error": "Receipt image is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Localizar a transação pelo ID
+        transaction = Transaction.objects.get(id=transaction_id, created_by=request.user)
+
+        # Decodificar a imagem base64 e salvar no campo 'receipt'
+        format, imgstr = receipt_image_base64.split(';base64,')
+        ext = format.split('/')[-1]
+        receipt_image = ContentFile(base64.b64decode(imgstr), name=f'receipt_{transaction_id}.{ext}')
+        transaction.receipt = receipt_image
+        transaction.save()
+
+        return Response({"message": "Transaction image uploaded successfully."}, status=status.HTTP_200_OK)
+
+    except Transaction.DoesNotExist:
+        return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+#?  -----------------------
+#?  -------- Dashboard ---------
+#?  -----------------------  
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_dashboard(request):
-    if request.method == 'GET':
-        # Pegar as datas de início e fim passadas via request
-        start_date  = request.GET.get('start_date')
-        end_date    = request.GET.get('end_date')
+    # Obter a data de início e fim a partir dos parâmetros da query
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
 
-        # Converter strings de data para objetos datetime.date
-        if start_date and end_date:
-            start_date = datetime.datetime.strptime(start_date, '%Y-%m-%d').date()
-            end_date = datetime.datetime.strptime(end_date, '%Y-%m-%d').date()
-        else:
-            # Se não forem passadas, usar o mês atual como padrão
-            today = timezone.now().date()
-            start_date = today.replace(day=1)  # Primeiro dia do mês
-            end_date = (today.replace(month=today.month % 12 + 1, day=1) - timezone.timedelta(days=1))  # Último dia do mês
-
-        # Data de hoje sem informações de fuso horário
+    # Converter strings de data para objetos datetime.date
+    if start_date and end_date:
+        start_date = datetime.datetime.strptime(start_date, '%Y-%m-%d').date()
+        end_date = datetime.datetime.strptime(end_date, '%Y-%m-%d').date()
+    else:
+        # Se não forem passadas, usar o mês atual como padrão
         today = timezone.now().date()
+        start_date = today.replace(day=1)
+        end_date = today
 
-        # Totais de entrada e saída do dia (somente o dia atual)
-        total_day_income = Installment.objects.filter(due_date=today, transaction__type='INCOME', created_by=request.user).aggregate(total=Sum('installment_value'))['total'] or 0
-        total_day_expenditure = Installment.objects.filter(due_date=today, transaction__type='EXPENDITURE', created_by=request.user).aggregate(total=Sum('installment_value'))['total'] or 0
+    today = timezone.now().date()
 
-        # Totais de entrada e saída do mês (usar data >= início e <= fim)
-        total_month_income = Installment.objects.filter(due_date__gte=start_date, due_date__lte=end_date, transaction__type='INCOME', created_by=request.user).aggregate(total=Sum('installment_value'))['total'] or 0
-        total_month_expenditure = Installment.objects.filter(due_date__gte=start_date, due_date__lte=end_date, transaction__type='EXPENDITURE', created_by=request.user).aggregate(total=Sum('installment_value'))['total'] or 0
+    print(f"Fetching data from {start_date} to {end_date} for user {request.user}")
 
-        # Retornar os totais como JSON
-        return JsonResponse({
-            'total_day_income': total_day_income,
-            'total_day_expenditure': total_day_expenditure,
-            'total_month_income': total_month_income,
-            'total_month_expenditure': total_month_expenditure,
-        })
-        
-        
-    
+    # Totais de entrada e saída do dia
+    total_day_income = Transaction.objects.filter(
+        expiry_date=today, type='INCOME', created_by=request.user
+    ).aggregate(total=Sum('value_installment'))['total'] or 0
+
+    total_day_expenditure = Transaction.objects.filter(
+        expiry_date=today, type='EXPENDITURE', created_by=request.user
+    ).aggregate(total=Sum('value_installment'))['total'] or 0
+
+    # Totais de entrada e saída do mês
+    total_month_income = Transaction.objects.filter(
+        expiry_date__gte=start_date, expiry_date__lte=end_date, type='INCOME', created_by=request.user
+    ).aggregate(total=Sum('value_installment'))['total'] or 0
+
+    total_month_expenditure = Transaction.objects.filter(
+        expiry_date__gte=start_date, expiry_date__lte=end_date, type='EXPENDITURE', created_by=request.user
+    ).aggregate(total=Sum('value_installment'))['total'] or 0
+
+    # Consultar as transações com base nas datas e tipos específicos
+    expenditure_transactions = Transaction.objects.filter(
+        expiry_date__gte=start_date,
+        expiry_date__lte=end_date,
+        type='EXPENDITURE',
+        created_by=request.user
+    ).order_by('expiry_date')
+
+    income_transactions = Transaction.objects.filter(
+        expiry_date__gte=start_date,
+        expiry_date__lte=end_date,
+        type='INCOME',
+        created_by=request.user
+    ).order_by('expiry_date')
+
+    print(f"Found {expenditure_transactions.count()} expenditure transactions for the user.")
+    print(f"Found {income_transactions.count()} income transactions for the user.")
+
+    # Agrupar transações e calcular os totais
+    transaction_summary_expenditure = []
+    transaction_summary_income = []
+    total_expenditure_value = 0
+    total_income_value = 0
+
+    # Gerar lista de todos os dias entre as datas
+    current_date = start_date
+    while current_date <= end_date:
+        # Verifica se há uma transação de despesa para o dia atual
+        day_expenditure_transactions = expenditure_transactions.filter(expiry_date=current_date)
+        if day_expenditure_transactions.exists():
+            # Se houver transações, usa o valor da última transação
+            for transaction in day_expenditure_transactions:
+                total_expenditure_value += transaction.value_installment
+                transaction_summary_expenditure.append({
+                    'day': current_date.day,
+                    'value': transaction.value_installment,
+                    'value_total': total_expenditure_value,
+                    'type': transaction.type
+                })
+        else:
+            # Se não houver transações, adiciona um dia com value 0
+            transaction_summary_expenditure.append({
+                'day': current_date.day,
+                'value': 0,
+                'value_total': total_expenditure_value,
+                'type': 'EXPENDITURE'  # Ou outro tipo padrão se necessário
+            })
+
+        # Verifica se há uma transação de receita para o dia atual
+        day_income_transactions = income_transactions.filter(expiry_date=current_date)
+        if day_income_transactions.exists():
+            # Se houver transações, usa o valor da última transação
+            for transaction in day_income_transactions:
+                total_income_value += transaction.value
+                transaction_summary_income.append({
+                    'day': current_date.day,
+                    'value': transaction.value,
+                    'value_total': total_income_value,
+                    'type': transaction.type
+                })
+        else:
+            # Se não houver transações, adiciona um dia com value 0
+            transaction_summary_income.append({
+                'day': current_date.day,
+                'value': 0,
+                'value_total': total_income_value,
+                'type': 'INCOME'  # Ou outro tipo padrão se necessário
+            })
+
+        current_date += timedelta(days=1)
+
+    # Retornar todos os dados em um único Response
+    return Response({
+        'total_day_income': total_day_income,
+        'total_day_expenditure': total_day_expenditure,
+        'total_month_income': total_month_income,
+        'total_month_expenditure': total_month_expenditure,
+        'transaction_summary_expenditure': transaction_summary_expenditure,
+        'transaction_summary_income': transaction_summary_income,
+    })

@@ -42,14 +42,11 @@ urlpatterns = [
     #? CRUD Transaction
     path('all-transaction/', get_all_transaction),
     path('transaction-by-id/', get_transaction_by_id),
-    path('create-transaction/', post_transaction),
+    path('create-transaction/', create_transaction),
     path('edit-transaction/<int:transaction_id>/', update_transaction),
     path('delete-transaction/<int:id>/', delete_transaction),
-    
-    #? CRUD Installment
-    path('all-installment/', get_installment),
-    path('pay-installment/', pay_installment),
-    path('upload-installment-image/', upload_installment_image),
+    path('pay-transaction/', pay_transaction),
+    path('upload-transaction-image/', upload_transaction_image),
     
     #? Dashboard
     path('get-dashboard/', get_dashboard),

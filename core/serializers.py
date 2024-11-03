@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from drf_base64.fields import Base64ImageField, Base64FileField
+from drf_base64.fields import Base64ImageField
 from .models import *
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -44,38 +44,33 @@ class AccountSerializer(serializers.ModelSerializer):
     model = Account
     fields = '__all__'  # Ou especifique os campos que você deseja incluir
         
+        
+class TransactionAccountSerializer(serializers.ModelSerializer):
+  class Meta:
+    model = Account
+    exclude = ['created_at', 'created_by', 'updated_at', 'updated_by']  # Exclui o campo 'password'
+
+class TransactionCategorySerializer(serializers.ModelSerializer):
+  class Meta:
+    model = Category
+    fields = ['id', 'bg_color', 'color', 'name', 'percent'] 
+    
 class TransactionSerializer(serializers.ModelSerializer):
+  account_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
+  category_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
+  
+  def get_account_obj(self, obj):
+    if obj.account:
+        return TransactionAccountSerializer(obj.account).data
+    return None
+  
+  def get_category_obj(self, obj):
+    if obj.category:
+        return TransactionCategorySerializer(obj.category).data
+    return None
   
   class Meta:
     model = Transaction
     fields = '__all__'
     
     
-class InstallmentAccountSerializer(serializers.ModelSerializer):
-  class Meta:
-    model = Account
-    exclude = ['created_at', 'created_by', 'updated_at', 'updated_by']  # Exclui o campo 'password'
-
-class InstallmentCategorySerializer(serializers.ModelSerializer):
-  class Meta:
-    model = Category
-    fields = ['id', 'bg_color', 'color', 'name', 'percent'] 
-    
-    
-class InstallmentSerializer(serializers.ModelSerializer):
-  installment_image = Base64ImageField(required=False)
-  account_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
-  category_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
-  
-  def get_account_obj(self, obj):
-    if obj.account:
-        return InstallmentAccountSerializer(obj.account).data
-    return None
-  
-  def get_category_obj(self, obj):
-    if obj.category:
-        return InstallmentCategorySerializer(obj.category).data
-    return None
-  class Meta:
-    model = Installment
-    fields = '__all__'

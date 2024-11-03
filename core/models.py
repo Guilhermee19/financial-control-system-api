@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.utils import timezone
-from drf_base64.fields import Base64ImageField, Base64FileField
+import uuid
 
 def update_last_login(sender, user, **kwargs):
     """
@@ -37,7 +37,6 @@ class UserManager(BaseUserManager):
         user.save(using=self._db)
 
         return user
-
 
 class User(AbstractBaseUser): 
     profile_image = models.ImageField(upload_to='profiles/', null=True, blank=True)
@@ -91,13 +90,21 @@ class BaseModel(models.Model):
         abstract = True
 
 class Account(BaseModel):
+    # TYPE_CHOICES = [
+    #     ('INCOME', 'Corrente'),
+    #     ('EXPENDITURE', 'Poupança'),
+    #     ('TRANSFER', 'Investimento'),
+    #     ('TRANSFER', 'Outros')
+    # ]
+     
     name = models.CharField(max_length=100)
     balance = models.DecimalField(max_digits=10, decimal_places=2)
+    # type = models.CharField(max_length=30, default='INCOME', choices=TYPE_CHOICES)
+    # bank = models.CharField(max_length=100)
 
     def __str__(self):
         return self.name
 
-# Cartões (vinculados às contas)
 class Card(BaseModel):
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='cards')
     card_type = models.CharField(max_length=10, choices=[('CREDIT', 'Crédito'), ('DEBIT', 'Débito')], default='DEBIT')
@@ -122,50 +129,38 @@ class Category(BaseModel):
         return self.name
     
 class Transaction(BaseModel):
-    TYPE_CHOICES = [
-        ('INCOME', 'Receita'),
-        ('EXPENDITURE', 'Despesa'),
-        ('TRANSFER', 'Transferência')
-    ]
-      
-    REPEAT_CHOICES = [
-        ('SINGLE', 'Único'),
-        ('WEEKLY', 'Semanal'),
-        ('MONTHLY', 'Mensal'),
-        ('ANNUAL', 'Anual'),
-        ('INSTALLMENTS', 'Parcelada'),
-    ]
-
-    date = models.DateField(null=True, blank=True)
+    # Campos principais da transação
     value = models.FloatField()
-    number_of_installments = models.IntegerField()
+    value_installment = models.FloatField(default=0)
     description = models.CharField(max_length=255)
-    type = models.CharField(max_length=30, default='INCOME', choices=TYPE_CHOICES)
-    recurrence = models.CharField(max_length=30, default='DAILY', choices=REPEAT_CHOICES)
+    account = models.ForeignKey('Account', null=True, on_delete=models.CASCADE)  # Supondo que você tenha um modelo Account
+    category = models.ForeignKey('Category', null=True, on_delete=models.SET_NULL)  # Supondo que você tenha um modelo Category
+    expiry_date = models.DateField(null=True, blank=True)
+    is_paid = models.BooleanField(default=False)
+    date_payment = models.DateField(null=True, blank=True)
+    receipt = models.ImageField(upload_to='installments/', null=True, blank=True)
+    installments = models.IntegerField()
+    current_installment = models.IntegerField(default=1)
     
-    def __str__(self):
-        return f"{self.id} - {self.description}"
+    # Relacionamento com a própria transação
+    related_transaction = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
 
-class Installment(BaseModel):
-    TYPE_CHOICES = [
+    # Tipo de transação (Receita, Despesa, Transferência)
+    TRANSACTION_TYPE_CHOICES = [
         ('INCOME', 'Receita'),
         ('EXPENDITURE', 'Despesa'),
-        ('TRANSFER', 'Transferência')
+        ('TRANSFER', 'Transferência'),
     ]
-        
-    transaction = models.ForeignKey(Transaction, related_name='installments', null=True, blank=True, on_delete=models.SET_NULL)
-    account = models.ForeignKey(Account, null=True, on_delete=models.CASCADE)
-    card = models.ForeignKey(Card, on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
-    category = models.ForeignKey(Category, null=True, on_delete=models.SET_NULL)
-    installment_value = models.FloatField()
-    current_installment = models.IntegerField()
-    total_installments = models.IntegerField(default=1)
-    due_date  = models.DateField(null=True, blank=True)
-    is_paid = models.BooleanField(default=False)
-    payment_date  = models.DateField(null=True, blank=True)
-    type = models.CharField(max_length=30, default='INCOME', choices=TYPE_CHOICES)
-    receipt = models.ImageField(upload_to='installments/', null=True, blank=True)
-    
-    def __str__(self):
-        return f"{self.transaction} - Installment {self.current_installment}"
+    type = models.CharField(max_length=12, choices=TRANSACTION_TYPE_CHOICES)
 
+    # Frequência de recorrência (Única, Semanal, Mensal, Anual)
+    RECURRENCE_CHOICES = [
+        ('SINGLE', 'Single'),
+        ('WEEKLY', 'Weekly'),
+        ('MONTHLY', 'Monthly'),
+        ('ANNUAL', 'Yearly'),
+    ]
+    recurrence = models.CharField(max_length=10, choices=RECURRENCE_CHOICES, default='single')
+
+    def __str__(self):
+        return f"{self.description} - {self.value} ({self.type})"
