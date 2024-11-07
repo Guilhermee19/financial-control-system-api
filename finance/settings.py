@@ -34,7 +34,8 @@ ALLOWED_HOSTS = [
     '5.252.54.146', 
     'finance-api.iamgui.dev',
     'checkmoney.iamgui.dev', 
-    'localhost:4200'
+    'localhost:4200',
+    'financee.me'
 ]
 
 CSRF_TRUSTED_ORIGINS = [
