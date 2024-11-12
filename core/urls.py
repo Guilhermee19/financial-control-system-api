@@ -18,6 +18,9 @@ urlpatterns = [
     path('create-user/', post_user),
     path('update-user/', update_user),
     
+    #? CRUD Plan
+    path('all-plan/', get_all_plan),
+    
     #? CRUD Category
     path('all-categories/', get_all_categories),
     path('category-by-id/', get_category_by_id),

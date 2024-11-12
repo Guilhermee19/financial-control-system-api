@@ -60,7 +60,11 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'core',
     'storages',
+    'ckeditor',
+    'ckeditor_uploader',
 ]
+
+CKEDITOR_UPLOAD_PATH = "uploads/"
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [

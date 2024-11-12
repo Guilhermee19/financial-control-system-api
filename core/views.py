@@ -263,6 +263,19 @@ def update_user(request):
     }, status=status.HTTP_400_BAD_REQUEST)
 
 
+#?  ----------------------
+#?  ------- PLANS --------
+#?  ----------------------
+@api_view(['GET'])
+def get_all_plan(request):
+
+    plans = Plan.objects.all()
+
+    serializer = PlanSerializer(plans, many=True)
+    return Response(serializer.data)
+
+
+
 #?  -----------------------
 #?  -------- CATERIES ---------
 #?  -----------------------

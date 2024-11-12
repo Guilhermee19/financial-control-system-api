@@ -14,6 +14,12 @@ class UserSerializer(serializers.ModelSerializer):
     exclude = ['user_token', 'password', 'forgot_password_expire', 'forgot_password_hash']  # Exclui o campo 'password'
     # fields = ['id', 'last_login', 'username', 'email', 'is_active']
     
+class PlanSerializer(serializers.ModelSerializer):
+  class Meta:
+    model = Plan
+    fields = '__all__' 
+    
+    
 class CategorySerializer(serializers.ModelSerializer):
   class Meta:
     model = Category

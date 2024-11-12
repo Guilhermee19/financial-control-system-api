@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.utils import timezone
-import uuid
+from ckeditor_uploader.fields import RichTextUploadingField
 
 def update_last_login(sender, user, **kwargs):
     """
@@ -37,6 +37,17 @@ class UserManager(BaseUserManager):
         user.save(using=self._db)
 
         return user
+
+
+
+class Plan(models.Model):
+    title = models.CharField(max_length=255)
+    monthly_price = models.FloatField(default=0)
+    annual_price = models.FloatField(default=0)
+    benefits = RichTextUploadingField(null=True, blank=True, default="")
+    
+    def __str__(self):
+        return self.title
 
 class User(AbstractBaseUser): 
     profile_image = models.ImageField(upload_to='profiles/', null=True, blank=True)
