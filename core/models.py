@@ -156,11 +156,12 @@ class Transaction(BaseModel):
     # Relacionamento com a própria transação
     related_transaction = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
 
-    # Tipo de transação (Receita, Despesa, Transferência)
+    # Tipo de transação (Receita, Despesa, Transferência, Investimento)
     TRANSACTION_TYPE_CHOICES = [
         ('INCOME', 'Receita'),
         ('EXPENDITURE', 'Despesa'),
         ('TRANSFER', 'Transferência'),
+        ('INVESTMENT', 'Investment'),
     ]
     type = models.CharField(max_length=12, choices=TRANSACTION_TYPE_CHOICES)
 
