@@ -553,7 +553,8 @@ def get_all_transaction(request):
         
         transactions = Transaction.objects.filter(
             expiry_date__gte=start_date,
-            expiry_date__lte=end_date
+            expiry_date__lte=end_date,
+            created_by=request.user
         ).order_by('expiry_date')
         
         serializer = TransactionSerializer(transactions, many=True)
