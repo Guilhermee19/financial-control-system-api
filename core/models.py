@@ -171,8 +171,9 @@ class Transaction(BaseModel):
         ('WEEKLY', 'Weekly'),
         ('MONTHLY', 'Monthly'),
         ('ANNUAL', 'Yearly'),
+        ('INSTALLMENTS', 'Installments'),
     ]
-    recurrence = models.CharField(max_length=10, choices=RECURRENCE_CHOICES, default='single')
+    recurrence = models.CharField(max_length=15, choices=RECURRENCE_CHOICES, default='single')
 
     def __str__(self):
         return f"{self.description} - {self.value} ({self.type})"
