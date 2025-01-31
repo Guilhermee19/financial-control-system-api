@@ -702,9 +702,19 @@ def update_transaction(request, transaction_id):
 def delete_transaction(request, id):
     try:
         transaction = Transaction.objects.get(id=int(id))
-        transaction.delete()
-    except:
-        return Response({'detail': 'transaction not found'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Verifica se deve excluir todas as transações relacionadas
+        all_transaction = request.query_params.get('all_transaction', 'false').lower() == 'true'
+        
+        if all_transaction:
+            # Busca todas as transações do mesmo grupo e deleta
+            Transaction.objects.filter(related_transaction=transaction).delete()
+            transaction.delete()
+        else:
+            transaction.delete()
+
+    except Transaction.DoesNotExist:
+        return Response({'detail': 'Transaction not found'}, status=status.HTTP_400_BAD_REQUEST)
 
     return Response({'worked': True})
 
