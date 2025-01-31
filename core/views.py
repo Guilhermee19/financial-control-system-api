@@ -608,7 +608,9 @@ def create_transaction(request):
             # Se houver parcelas, criar as transações adicionais
             for i in range(1, installments):
                 # Calcular a nova data de vencimento com base na recorrência
-                if transaction.recurrence == 'WEEKLY':
+                if transaction.recurrence == 'INSTALLMENTS':
+                    new_expiry_date = base_expiry_date + relativedelta(months=i)
+                elif transaction.recurrence == 'WEEKLY':
                     new_expiry_date = base_expiry_date + timedelta(weeks=i)
                 elif transaction.recurrence == 'MONTHLY':
                     new_expiry_date = base_expiry_date + relativedelta(months=i)
