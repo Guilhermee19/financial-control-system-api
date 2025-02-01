@@ -45,6 +45,8 @@ class Plan(models.Model):
     monthly_price = models.FloatField(default=0)
     annual_price = models.FloatField(default=0)
     benefits = RichTextUploadingField(null=True, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    order = models.IntegerField(default=0)
     
     def __str__(self):
         return self.title
