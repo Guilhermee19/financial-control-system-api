@@ -269,8 +269,7 @@ def update_user(request):
 @api_view(['GET'])
 def get_all_plan(request):
 
-    plans = Plan.objects.all()
-
+    plans = Plan.objects.filter(is_active=True)
     serializer = PlanSerializer(plans, many=True)
     return Response(serializer.data)
 
