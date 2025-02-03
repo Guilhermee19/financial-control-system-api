@@ -54,6 +54,6 @@ urlpatterns = [
     
     #? Dashboard
     path('get-dashboard/', get_dashboard),
-    path('get-dashboard-new/', get_dashboard_new),
-    # path('upload-file/', upload_file),
+    path('get-dashboard-category/', get_dashboard_category),
+    path('get-dashboard-expenditure-income/', get_dashboard_expenditure_income),
 ]                                           
