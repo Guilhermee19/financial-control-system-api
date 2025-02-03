@@ -2,6 +2,7 @@ from webbrowser import get
 from django.urls import path   
 from rest_framework.routers import DefaultRouter 
 from .views import *     
+from core.api.views import *     
 
 router = DefaultRouter()
 router.register(r'notifications', NotificationViewSet, basename='notification')  # Adicione o basename se necessário
