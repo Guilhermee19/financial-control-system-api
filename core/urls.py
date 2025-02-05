@@ -56,4 +56,5 @@ urlpatterns = [
     path('get-dashboard/', get_dashboard),
     path('get-dashboard-category/', get_dashboard_category),
     path('get-dashboard-expenditure-income/', get_dashboard_expenditure_income),
+    path('get-dashboard-upcoming-and-unpaid-transactions/', get_upcoming_and_unpaid_transactions),
 ]                                           
