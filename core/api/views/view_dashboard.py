@@ -36,11 +36,20 @@ def get_dashboard(request):
         expiry_date__gte=start_date, expiry_date__lte=end_date, type='INCOME', created_by=request.user
     ).aggregate(total=Sum('value_installment'))['total'] or 0
 
+    # Totais de entrada e saída do mês
+    total_income_pain = Transaction.objects.filter(
+        expiry_date__gte=start_date, expiry_date__lte=end_date, is_paid=True, type='INCOME', created_by=request.user
+    ).aggregate(total=Sum('value_installment'))['total'] or 0
+    
     total_expenditure = Transaction.objects.filter(
         expiry_date__gte=start_date, expiry_date__lte=end_date, type='EXPENDITURE', created_by=request.user
     ).aggregate(total=Sum('value_installment'))['total'] or 0
+    
+    total_expenditure_paid = Transaction.objects.filter(
+        expiry_date__gte=start_date, expiry_date__lte=end_date, is_paid=True, type='EXPENDITURE', created_by=request.user
+    ).aggregate(total=Sum('value_installment'))['total'] or 0
 
-    balance = total_income - total_expenditure
+    balance = total_income_pain - total_expenditure_paid
 
     # Retornar todos os dados em um único Response
     return Response({
@@ -175,6 +184,7 @@ def get_upcoming_and_unpaid_transactions(request):
         upcoming_transactions = Transaction.objects.filter(
             expiry_date__gte=today,  # Apenas futuras (hoje ou depois)
             expiry_date__range=(start_date, end_date),
+            is_paid=False,
             created_by=request.user
         ).order_by('expiry_date')[:10]
 
