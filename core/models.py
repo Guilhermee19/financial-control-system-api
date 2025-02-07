@@ -133,6 +133,7 @@ class Card(BaseModel):
         return f'{self.card_type} - {self.cardholder_name}'
     
 class Category(BaseModel):
+    icon = models.CharField(max_length=200, default='')
     name = models.CharField(max_length=100)
     color = models.CharField(max_length=20)
     bg_color = models.CharField(max_length=20, default='#f0f2f8')
