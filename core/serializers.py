@@ -59,7 +59,7 @@ class TransactionAccountSerializer(serializers.ModelSerializer):
 class TransactionCategorySerializer(serializers.ModelSerializer):
   class Meta:
     model = Category
-    fields = ['id', 'bg_color', 'color', 'name', 'percent'] 
+    fields = ['id', 'name', 'icon'] 
     
 class TransactionSerializer(serializers.ModelSerializer):
   account_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
