@@ -112,6 +112,8 @@ class Account(BaseModel):
      
     name = models.CharField(max_length=100)
     balance = models.DecimalField(max_digits=10, decimal_places=2)
+    is_active = models.BooleanField(default=True)
+    
     # type = models.CharField(max_length=30, default='INCOME', choices=TYPE_CHOICES)
     # bank = models.CharField(max_length=100)
 
@@ -133,11 +135,9 @@ class Card(BaseModel):
         return f'{self.card_type} - {self.cardholder_name}'
     
 class Category(BaseModel):
-    icon = models.CharField(max_length=200, default='')
-    name = models.CharField(max_length=100)
-    color = models.CharField(max_length=20)
-    bg_color = models.CharField(max_length=20, default='#f0f2f8')
-    percent = models.DecimalField(max_digits=5, decimal_places=2)
+    icon = models.CharField(max_length=200, default='', null=True, blank=True)
+    name = models.CharField(max_length=100, default='#f0f2f8')
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
