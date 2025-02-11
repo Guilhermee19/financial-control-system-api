@@ -11,19 +11,33 @@ from core.serializers import *
 #?  -----------------------
 @api_view(['GET'])
 def get_all_categories(request):
-    if(request.method == 'GET'):
-        categories = Category.objects.filter(created_by = request.user)
-    
-        # PAGINATION
+    if request.method == 'GET':
+        # Obtém os parâmetros de status e nome da requisição
+        status_filter = request.query_params.get('status', None)  # status: 'active' ou 'all'
+        name_filter = request.query_params.get('name', None)  # Nome para filtrar categorias
+        
+        # Filtra as categorias com base no status e no nome
+        categories = Category.objects.filter(created_by=request.user)
+        
+        if status_filter == 'active':
+            categories = categories.filter(is_active=True)
+        elif status_filter == 'inactive':
+            categories = categories.filter(is_active=False)
+        
+        if name_filter:
+            categories = categories.filter(name__icontains=name_filter)  # Filtro por nome (case insensitive)
+
+        # PAGINAÇÃO
         paginator = PageNumberPagination()
         paginator.page_size = request.query_params.get('page_size', 10)
         paginator.page_query_param = 'page'
         
+        # Serializa as categorias e aplica a paginação
         serializer = CategorySerializer(paginator.paginate_queryset(categories, request), many=True).data
         return paginator.get_paginated_response(serializer)
-
     
     return Response(status=status.HTTP_400_BAD_REQUEST)
+
 
 
 @api_view(['GET'])

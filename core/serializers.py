@@ -59,7 +59,7 @@ class TransactionAccountSerializer(serializers.ModelSerializer):
 class TransactionCategorySerializer(serializers.ModelSerializer):
   class Meta:
     model = Category
-    fields = ['id', 'name', 'icon'] 
+    exclude = ['created_at', 'created_by', 'updated_at', 'updated_by']  # Exclui o campo 'password'
     
 class TransactionSerializer(serializers.ModelSerializer):
   account_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado

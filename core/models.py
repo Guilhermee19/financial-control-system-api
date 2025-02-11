@@ -134,9 +134,18 @@ class Card(BaseModel):
     def __str__(self):
         return f'{self.card_type} - {self.cardholder_name}'
     
+class Icon(BaseModel):
+    name = models.CharField(max_length=100, default='')
+    icon_svg = models.TextField(default='', null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
 class Category(BaseModel):
-    icon = models.CharField(max_length=200, default='', null=True, blank=True)
-    name = models.CharField(max_length=100, default='#f0f2f8')
+    name = models.CharField(max_length=100, default='')
+    icon = models.TextField(default='', null=True, blank=True)
+    # icon_obj = models.ForeignKey('Icon', null=True, on_delete=models.SET_NULL, default=None)  # Supondo que você tenha um modelo Category
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
