@@ -1,8 +1,7 @@
 import base64
 from django.core.files.base import ContentFile
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from core.models import Transaction
@@ -71,16 +70,22 @@ def create_transaction(request):
         # Obter os dados da requisição
         data = request.data.copy()
         installments = int(data.get('installments', 1))  # Garantir que é um inteiro
+        recurrence = data.get('recurrence', 'SINGLE')  # Obter a recorrência
         
         # Atribuir o ID do usuário autenticado aos campos 'created_by' e 'updated_by'
         data['created_by'] = user.id  # Atribui o ID do usuário
         data['updated_by'] = user.id  # Atribui o ID do usuário
         
         # Calcular o valor de cada parcela
-        if installments > 0:
-            value_installment = data.get('value', 0) / installments  # Divide o valor total pelo número de parcelas
-            data['value_installment'] = value_installment  # Ajusta o valor total da transação para o valor da parcela
-
+        total_value = float(data.get('value', 0))
+        
+        if recurrence == 'INSTALLMENTS' and installments > 0:
+            value_installment = total_value / installments  # Divide o valor total pelo número de parcelas
+        else:
+            value_installment = total_value  # Para outros tipos de recorrência, mantém o valor total
+        
+        data['value_installment'] = value_installment  
+        
         # Criar a transação principal
         serializer = TransactionSerializer(data=data)
         if serializer.is_valid():
@@ -140,47 +145,50 @@ def update_transaction(request, transaction_id):
 
         # Obter os dados da requisição
         data = request.data.copy()
+        installments = int(data.get('installments', transaction.installments))  # Garantir que é um inteiro
+        recurrence = data.get('recurrence', 'SINGLE')  # Obter a recorrência
         
-        installments = int(data.get('installments', 1))  # Garantir que é um inteiro
-        
-          
         # Calcular o valor de cada parcela
-        if installments > 0:
-            value_installment = data.get('value', 0) / installments  # Divide o valor total pelo número de parcelas
-            data['value_installment'] = value_installment  # Ajusta o valor total da transação para o valor da parcela
-            
+        total_value = float(data.get('value', 0))
+        
+        if recurrence == 'INSTALLMENTS' and installments > 0:
+            value_installment = total_value / installments  # Divide o valor total pelo número de parcelas
+        else:
+            value_installment = total_value  # Para outros tipos de recorrência, mantém o valor total
+        
+        data['value_installment'] = value_installment  
+        
         # Atualizar a transação principal
         serializer = TransactionSerializer(transaction, data=data, partial=True)  # Use partial=True para permitir atualizações parciais
         if serializer.is_valid():
             updated_transaction = serializer.save()  # Salva a transação atualizada
             
-            # Checar se o parâmetro edit_all_installments está definido como True
-            edit_all_installments = data.get('edit_all_installments', False)
-
-            # Se edit_all_installments for verdadeiro, atualizar todas as transações relacionadas
-            if edit_all_installments:
+            # Checar se o parâmetro edit_all está definido como True
+            edit_all = data.get('edit_all', False)
+            print(edit_all)
+            
+            # Se edit_all for verdadeiro, atualizar todas as transações relacionadas
+            print(transaction.related_transaction)
+            
+            if edit_all:
                 related_transactions = Transaction.objects.filter(related_transaction=updated_transaction)
 
-                # Calcular o novo valor da parcela, se houver parcelas
-                total_value = updated_transaction.value
-                installments = updated_transaction.installments
+                for rel_transaction in related_transactions:
+                    rel_transaction.value_installment = updated_transaction.value / installments if installments > 0 else updated_transaction.value
+                    rel_transaction.value = updated_transaction.value
+                    rel_transaction.description = updated_transaction.description
 
-                if installments > 0:
-                    new_value_installment = total_value / installments
-                    
-                    # Atualizar o value_installment e o related_transaction das transações relacionadas
-                    related_transactions.update(
-                        value_installment=new_value_installment, 
-                        value=data['value'], 
-                        description=data['description'], 
-                        account=data['account'], 
-                        category=data['category'], 
-                        related_transaction=updated_transaction
-                    )
+                    if 'account' in data:
+                        rel_transaction.account_id = data['account']  # Certifique-se de que é um ID válido
+                    if 'category' in data:
+                        rel_transaction.category_id = data['category']  # Certifique-se de que é um ID válido
+
+                    rel_transaction.save()  # Salva cada transação individualmente
 
             return Response({"message": "Transaction updated successfully."}, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(['DELETE'])
 def delete_transaction(request, id):
@@ -190,17 +198,29 @@ def delete_transaction(request, id):
         # Verifica se deve excluir todas as transações relacionadas
         all_transaction = request.query_params.get('all_transaction', 'false').lower() == 'true'
         
+        print(all_transaction)
+        
         if all_transaction:
-            # Busca todas as transações do mesmo grupo e deleta
-            Transaction.objects.filter(related_transaction=transaction).delete()
-            transaction.delete()
-        else:
-            transaction.delete()
+            print(transaction.related_transaction)
+            
+            if transaction.related_transaction is None:
+                # Se a transação não tem um related_transaction, significa que é a principal
+                Transaction.objects.filter(related_transaction=transaction).delete()
+            else:
+                # Excluir todas as transações do mesmo grupo, incluindo a principal
+                Transaction.objects.filter(
+                    related_transaction=transaction.related_transaction
+                ).delete()
+                transaction.related_transaction.delete()
+        
+        # Se não for para deletar todas, apenas a transação selecionada é excluída
+        transaction.delete()
 
     except Transaction.DoesNotExist:
         return Response({'detail': 'Transaction not found'}, status=status.HTTP_400_BAD_REQUEST)
 
-    return Response({'worked': True})
+    return Response({'worked': True}, status=status.HTTP_200_OK)
+
 
       
 @api_view(['PATCH'])
