@@ -35,6 +35,7 @@ ALLOWED_HOSTS = [
     'finance-api.iamgui.dev',
     'checkmoney.iamgui.dev', 
     'localhost:4200',
+    '192.168.3.2',
     'financee.me'
 ]
 
