@@ -9,6 +9,14 @@ class NotificationSerializer(serializers.ModelSerializer):
         
 class UserSerializer(serializers.ModelSerializer):
   profile_image = Base64ImageField(required=False)
+  
+  plan_obj = serializers.SerializerMethodField()  # Aqui você usa o serializer aninhado
+  
+  def get_plan_obj(self, obj):
+    if obj.plan:
+        return PlanSerializer(obj.plan).data
+    return None
+  
   class Meta:
     model = User
     exclude = ['user_token', 'password', 'forgot_password_expire', 'forgot_password_hash']  # Exclui o campo 'password'

@@ -13,6 +13,7 @@ class UserAdmin(BaseUserAdmin):
                             'password',
                             'profile_image',
                             'name',
+                            'plan',
                             'is_deleted',
                             'is_active',)}),
         ('Permissions', {'fields': ('is_admin',)}),
