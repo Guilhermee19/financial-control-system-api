@@ -236,6 +236,7 @@ def pay_transaction(request):
         # Localizar a transação pelo ID e marcar como paga
         transaction = Transaction.objects.get(id=transaction_id, created_by=request.user)
         transaction.is_paid = True
+        transaction.date_payment = datetime.datetime.today()
 
         # Verificar se uma imagem foi enviada
         if receipt_image_base64:
