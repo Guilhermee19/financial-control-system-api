@@ -32,17 +32,57 @@ def get_all_transaction(request):
         except ValueError:
             return Response({"error": "Invalid date format, use YYYY-MM-DD"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # transactions = Transaction.objects.all()
-        
-        transactions = Transaction.objects.filter(
-            expiry_date__gte=start_date,
-            expiry_date__lte=end_date,
-            created_by=request.user
-        ).order_by('expiry_date')
-        
+        # Filter by additional parameters
+        account_id = request.GET.get('account')  # Filter by account ID
+        category_id = request.GET.get('category')  # Filter by category ID
+        status = request.GET.get('status')  # Filter by status (e.g., 'paid', 'unpaid')
+        transaction_type = request.GET.get('type')  # 'EXPENDITURE', 'REVENUE', etc.
+        recurrence = request.GET.get('recurrence')  # 'INSTALLMENTS', etc.
+
+        filters = {
+            'expiry_date__gte': start_date,
+            'expiry_date__lte': end_date,
+            'created_by': request.user
+        }
+
+        # Apply the filters dynamically
+        if account_id:
+            filters['account'] = account_id
+        if category_id:
+            filters['category'] = category_id
+        if status:
+            filters['is_paid'] = status.lower() == 'true'  # Convert string to boolean
+        if transaction_type:
+            filters['type'] = transaction_type
+        if recurrence:
+            filters['recurrence'] = recurrence
+
+        # Transactions Query with filters
+        transactions = Transaction.objects.filter(**filters)
+
+        # Handle ordering
+        order_by = request.GET.get('order_by', 'expiry_date')  # Default ordering by 'expiry_date'
+        order_direction = request.GET.get('order_direction', 'asc')  # Default direction is ascending
+
+        # Define possible order fields
+        valid_order_fields = [
+            'description', 'account', 'category', 'value', 'is_paid', 'expiry_date'
+        ]
+
+        # If the field passed for ordering is not valid, fallback to default (expiry_date)
+        if order_by not in valid_order_fields:
+            order_by = 'expiry_date'
+
+        # Handle ordering direction
+        if order_direction == 'desc':
+            transactions = transactions.order_by(f'-{order_by}')
+        else:
+            transactions = transactions.order_by(order_by)
+
+        # Serialize the filtered transactions
         serializer = TransactionSerializer(transactions, many=True)
         return Response(serializer.data)
-    
+
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
 
