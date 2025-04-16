@@ -178,56 +178,79 @@ def create_transaction(request):
 def update_transaction(request, transaction_id):
     if request.method == 'PATCH':
         try:
-            # Buscar a transação principal
             transaction = Transaction.objects.get(id=transaction_id)
         except Transaction.DoesNotExist:
             return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        # Obter os dados da requisição
-        data = request.data.copy()
+        
+        # Obter os dados enviados na requisição e garantir que são válidos
+        data = request.data
         installments = int(data.get('installments', transaction.installments))  # Garantir que é um inteiro
-        recurrence = data.get('recurrence', 'SINGLE')  # Obter a recorrência
+        recurrence = data.get('recurrence', transaction.recurrence)  # Usar o valor atual se não enviado
+        total_value = float(data.get('value', transaction.value))  # Usar o valor atual se não enviado
         
-        # Calcular o valor de cada parcela
-        total_value = float(data.get('value', 0))
+        # Atualizar as transações relacionadas se 'edit_all' for True
+        edit_all = data.get('edit_all', False)
+
+        # Se edit_all for verdadeiro, recalcular o valor da parcela
+        if edit_all:
+            if recurrence == 'INSTALLMENTS' and installments > 0:
+                value_installment = total_value / installments
+            else:
+                value_installment = total_value
+
+            data['value_installment'] = value_installment
+
+        # Serializar e atualizar apenas os campos que foram modificados
+        serializer = TransactionSerializer(transaction, data=data, partial=True)
         
-        if recurrence == 'INSTALLMENTS' and installments > 0:
-            value_installment = total_value / installments  # Divide o valor total pelo número de parcelas
-        else:
-            value_installment = total_value  # Para outros tipos de recorrência, mantém o valor total
-        
-        data['value_installment'] = value_installment  
-        
-        # Atualizar a transação principal
-        serializer = TransactionSerializer(transaction, data=data, partial=True)  # Use partial=True para permitir atualizações parciais
         if serializer.is_valid():
-            updated_transaction = serializer.save()  # Salva a transação atualizada
-            
-            # Checar se o parâmetro edit_all está definido como True
-            edit_all = data.get('edit_all', False)
-            print(edit_all)
-            
-            # Se edit_all for verdadeiro, atualizar todas as transações relacionadas
-            print(transaction.related_transaction)
-            
+            updated_transaction = serializer.save()
+
             if edit_all:
-                related_transactions = Transaction.objects.filter(related_transaction=updated_transaction)
+                # Caso a transação seja a principal, atualiza todas as transações relacionadas
+                if updated_transaction.related_transaction is None:
+                    related_transactions = Transaction.objects.filter(related_transaction=updated_transaction)
+                    for rel_transaction in related_transactions:
+                        rel_transaction.value_installment = updated_transaction.value / installments if installments > 0 else updated_transaction.value
+                        rel_transaction.value = updated_transaction.value
+                        rel_transaction.description = updated_transaction.description
 
-                for rel_transaction in related_transactions:
-                    rel_transaction.value_installment = updated_transaction.value / installments if installments > 0 else updated_transaction.value
-                    rel_transaction.value = updated_transaction.value
-                    rel_transaction.description = updated_transaction.description
+                        # Atualizar os outros campos relacionados, se presentes na requisição
+                        if 'account' in data:
+                            rel_transaction.account_id = data['account']
+                        if 'category' in data:
+                            rel_transaction.category_id = data['category']
 
-                    if 'account' in data:
-                        rel_transaction.account_id = data['account']  # Certifique-se de que é um ID válido
-                    if 'category' in data:
-                        rel_transaction.category_id = data['category']  # Certifique-se de que é um ID válido
+                        rel_transaction.save()
 
-                    rel_transaction.save()  # Salva cada transação individualmente
+                # Caso seja uma das parcelas, edita as transações a partir da atual
+                else:
+                    related_transactions = Transaction.objects.filter(
+                        related_transaction=updated_transaction.related_transaction,
+                        expiry_date__gte=updated_transaction.expiry_date
+                    )
+                    for rel_transaction in related_transactions:
+                        rel_transaction.value_installment = updated_transaction.value / installments if installments > 0 else updated_transaction.value
+                        rel_transaction.value = updated_transaction.value
+                        rel_transaction.description = updated_transaction.description
 
-            return Response({"message": "Transaction updated successfully."}, status=status.HTTP_200_OK)
+                        # Atualizar os outros campos relacionados
+                        if 'account' in data:
+                            rel_transaction.account_id = data['account']
+                        if 'category' in data:
+                            rel_transaction.category_id = data['category']
+
+                        rel_transaction.save()
+
+            # Retornar a transação atualizada junto com uma mensagem de sucesso
+            return Response({
+                "message": "Transaction updated successfully.",
+                "transaction": TransactionSerializer(updated_transaction).data
+            }, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
 
 
 @api_view(['DELETE'])

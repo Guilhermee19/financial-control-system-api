@@ -104,20 +104,10 @@ class BaseModel(models.Model):
         abstract = True
 
 class Account(BaseModel):
-    # TYPE_CHOICES = [
-    #     ('INCOME', 'Corrente'),
-    #     ('EXPENDITURE', 'Poupança'),
-    #     ('TRANSFER', 'Investimento'),
-    #     ('TRANSFER', 'Outros')
-    # ]
-     
     name = models.CharField(max_length=100)
     balance = models.DecimalField(max_digits=10, decimal_places=2)
     is_active = models.BooleanField(default=True)
     
-    # type = models.CharField(max_length=30, default='INCOME', choices=TYPE_CHOICES)
-    # bank = models.CharField(max_length=100)
-
     def __str__(self):
         return self.name
 
@@ -146,8 +136,16 @@ class Icon(BaseModel):
 class Category(BaseModel):
     name = models.CharField(max_length=100, default='')
     icon = models.TextField(default='', null=True, blank=True)
-    # icon_obj = models.ForeignKey('Icon', null=True, on_delete=models.SET_NULL, default=None)  # Supondo que você tenha um modelo Category
     is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+    
+class Subcategory(BaseModel):
+    name = models.CharField(max_length=100, default='')
+    icon = models.TextField(default='', null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='category')
 
     def __str__(self):
         return self.name
@@ -158,6 +156,7 @@ class Transaction(BaseModel):
     value_installment = models.FloatField(default=0)
     description = models.CharField(max_length=255)
     account = models.ForeignKey('Account', null=True, on_delete=models.CASCADE)  # Supondo que você tenha um modelo Account
+    card = models.ForeignKey('Card', null=True, on_delete=models.CASCADE)  # Supondo que você tenha um modelo Account
     category = models.ForeignKey('Category', null=True, on_delete=models.SET_NULL)  # Supondo que você tenha um modelo Category
     expiry_date = models.DateField(null=True, blank=True)
     is_paid = models.BooleanField(default=False)
