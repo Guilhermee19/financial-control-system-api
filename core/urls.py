@@ -9,9 +9,7 @@ router.register(r'notifications', NotificationViewSet, basename='notification') 
 
 urlpatterns = [     
     path('auth/', auth_user),
-    path('social-network/', social_network),
     path('get-user/', get_user),
-    path('notifications/', notifications_view),
     
     #? CRUD User
     path('all-users/', get_all_users),
@@ -50,7 +48,6 @@ urlpatterns = [
     path('edit-transaction/<int:transaction_id>/', update_transaction),
     path('delete-transaction/<int:id>/', delete_transaction),
     path('pay-transaction/', pay_transaction),
-    path('upload-transaction-image/', upload_transaction_image),
     
     #? Dashboard
     path('get-dashboard/', get_dashboard),

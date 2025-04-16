@@ -107,13 +107,11 @@ def post_user(request):
         new_user = request.data
         serializer = UserSerializer(data=new_user)
 
-
         if serializer.is_valid():
             item = serializer.save()
             item.set_password(request.data["password"])
             item.save()
 
-            # Remove o .data aqui
             serializer = UserSerializer(item)
         
             return Response(serializer.data, status=status.HTTP_201_CREATED)

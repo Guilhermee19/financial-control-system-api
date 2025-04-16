@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     'storages',
     'ckeditor',
     'ckeditor_uploader',
+    'drf_yasg',  # Adicione isso para garantir que o Swagger funcione
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"

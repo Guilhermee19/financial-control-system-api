@@ -339,34 +339,3 @@ def cancel_pay_transaction(request):
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
-
-@api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
-def upload_transaction_image(request):
-    transaction_id = request.data.get('transaction_id')
-    receipt_image_base64 = request.data.get('receipt_image', None)
-
-    if not transaction_id:
-        return Response({"error": "Transaction ID is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-    if not receipt_image_base64:
-        return Response({"error": "Receipt image is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        # Localizar a transação pelo ID
-        transaction = Transaction.objects.get(id=transaction_id, created_by=request.user)
-
-        # Decodificar a imagem base64 e salvar no campo 'receipt'
-        format, imgstr = receipt_image_base64.split(';base64,')
-        ext = format.split('/')[-1]
-        receipt_image = ContentFile(base64.b64decode(imgstr), name=f'receipt_{transaction_id}.{ext}')
-        transaction.receipt = receipt_image
-        transaction.save()
-
-        return Response({"message": "Transaction image uploaded successfully."}, status=status.HTTP_200_OK)
-
-    except Transaction.DoesNotExist:
-        return Response({"error": "Transaction not found."}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
