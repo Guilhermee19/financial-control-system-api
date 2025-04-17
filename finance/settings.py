@@ -37,6 +37,7 @@ ALLOWED_HOSTS = [
     'localhost:4200',
     '192.168.3.2',
     'financee.me'
+    'dev.financee.me'
 ]
 
 CSRF_TRUSTED_ORIGINS = [
