@@ -5,7 +5,6 @@ from .views import *
 from core.api.views import *     
 
 router = DefaultRouter()
-router.register(r'notifications', NotificationViewSet, basename='notification')  # Adicione o basename se necessário
 
 urlpatterns = [     
     path('auth/', auth_user),

@@ -14,11 +14,3 @@ python manage.py migrate
 python manage.py runserver
 
 python manage.py createsuperuser
-
-
-## WebSocket
-
-ws://127.0.0.1:8000/ws/notifications/
-
-``` daphne finance.asgi:application ```
-

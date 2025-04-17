@@ -33,6 +33,7 @@ admin.site.unregister(Group)
 
 admin.site.register(User, UserAdmin)
 admin.site.register(Category)
+admin.site.register(Subcategory)
 admin.site.register(Account)
 admin.site.register(Card)
 admin.site.register(Plan)

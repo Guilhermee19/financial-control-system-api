@@ -50,6 +50,10 @@ class Plan(models.Model):
     
     def __str__(self):
         return self.title
+    
+    class Meta:
+        verbose_name = "Plano"
+        verbose_name_plural = "Planos"
 
 class User(AbstractBaseUser): 
     profile_image = models.ImageField(upload_to='profiles/', null=True, blank=True)
@@ -85,14 +89,9 @@ class User(AbstractBaseUser):
     def is_staff(self):
         return self.is_admin
     
-class Notification(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    message = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
-    is_read = models.BooleanField(default=False)
-
-    def __str__(self):
-        return f'Notification for {self.user.username}: {self.message}'
+    class Meta:
+        verbose_name = "Usuário"
+        verbose_name_plural = "Usuários"
     
 class BaseModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -110,9 +109,12 @@ class Account(BaseModel):
     
     def __str__(self):
         return self.name
+    
+    class Meta:
+        verbose_name = "Conta"
+        verbose_name_plural = "Contas"
 
 class Card(BaseModel):
-    account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='cards')
     card_type = models.CharField(max_length=10, choices=[('CREDIT', 'Crédito'), ('DEBIT', 'Débito')], default='DEBIT')
     number = models.CharField(max_length=16, unique=True)
     expiration_date = models.DateField()
@@ -125,6 +127,10 @@ class Card(BaseModel):
     def __str__(self):
         return f'{self.card_type} - {self.cardholder_name}'
     
+    class Meta:
+        verbose_name = "Cartão"
+        verbose_name_plural = "Cartões"
+    
 class Icon(BaseModel):
     name = models.CharField(max_length=100, default='')
     icon_svg = models.TextField(default='', null=True, blank=True)
@@ -132,6 +138,10 @@ class Icon(BaseModel):
 
     def __str__(self):
         return self.name
+    
+    class Meta:
+        verbose_name = "Icone"
+        verbose_name_plural = "Icones"
 
 class Category(BaseModel):
     name = models.CharField(max_length=100, default='')
@@ -141,6 +151,10 @@ class Category(BaseModel):
     def __str__(self):
         return self.name
     
+    class Meta:
+        verbose_name = "Categoria"
+        verbose_name_plural = "Categorias"
+    
 class Subcategory(BaseModel):
     name = models.CharField(max_length=100, default='')
     icon = models.TextField(default='', null=True, blank=True)
@@ -149,6 +163,10 @@ class Subcategory(BaseModel):
 
     def __str__(self):
         return self.name
+    
+    class Meta:
+        verbose_name = "Subcategoria"
+        verbose_name_plural = "Subcategorias"
     
 class Transaction(BaseModel):
     # Campos principais da transação
@@ -173,7 +191,6 @@ class Transaction(BaseModel):
         ('INCOME', 'Receita'),
         ('EXPENDITURE', 'Despesa'),
         ('TRANSFER', 'Transferência'),
-        ('INVESTMENT', 'Investment'),
     ]
     type = models.CharField(max_length=12, choices=TRANSACTION_TYPE_CHOICES)
 
@@ -189,3 +206,7 @@ class Transaction(BaseModel):
 
     def __str__(self):
         return f"{self.description} - {self.value} ({self.type})"
+    
+    class Meta:
+        verbose_name = "Transação"
+        verbose_name_plural = "Transações"
