@@ -92,6 +92,18 @@ MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # Adicionado aqui
 ]
 
+SWAGGER_SETTINGS = {
+    'SECURITY_DEFINITIONS': {
+        'Token': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header',
+            'description': 'Token <your_token>'
+        }
+    },
+    'USE_SESSION_AUTH': False,
+}
+
 ROOT_URLCONF = 'finance.urls'
 
 TEMPLATES = [
