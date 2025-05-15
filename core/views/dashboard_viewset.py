@@ -152,7 +152,7 @@ class DashboardViewSet(viewsets.ViewSet):
         today = timezone.now().date()
 
         upcoming = Transaction.objects.filter(
-            expiry_date__range=(today, end_date),
+            expiry_date__range=(start_date, end_date),
             is_paid=False,
             created_by=request.user
         ).order_by('expiry_date')[:10]
