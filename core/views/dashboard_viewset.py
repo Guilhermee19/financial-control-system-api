@@ -151,18 +151,19 @@ class DashboardViewSet(viewsets.ViewSet):
 
         today = timezone.now().date()
 
-        upcoming = Transaction.objects.filter(
-            expiry_date__range=(start_date, end_date),
-            is_paid=False,
-            created_by=request.user
-        ).order_by('expiry_date')[:10]
-
         overdue = Transaction.objects.filter(
             expiry_date__lt=today,
             expiry_date__range=(start_date, end_date),
             is_paid=False,
             created_by=request.user
         ).order_by('expiry_date')
+    
+        upcoming = Transaction.objects.filter(
+            expiry_date__range=(start_date, end_date),
+            is_paid=False,
+            created_by=request.user
+        ).exclude(id__in=overdue.values_list('id', flat=True)).order_by('expiry_date')[:10]
+    
 
         return Response({
             "upcoming": TransactionSerializer(upcoming, many=True).data,
